@@ -10,6 +10,14 @@ pub fn sony(_name: &str, _v: &Value) -> Option<String> {
     None
 }
 
+/// An `undef` value's raw bytes, if any.
+fn bytes(v: &Value) -> Option<&[u8]> {
+    match v {
+        Value::Bytes(b) => Some(b),
+        _ => None,
+    }
+}
+
 /// A numeric value's elements as i64 (empty for non-numeric values).
 fn ints(v: &Value) -> Vec<i64> {
     match v {
@@ -199,6 +207,47 @@ pub fn pentax(name: &str, v: &Value) -> Option<String> {
         // "640 480" -> "640x480" (tr/ /x/).
         "PreviewImageSize" => Some(v.to_string().replace(' ', "x")),
         "CameraTemperature" => Some(format!("{} C", v)),
+
+        // Date/Time are stored as packed `undef` bytes: Date = big-endian
+        // uint16 year + month + day; Time = hour, minute, second.
+        "Date" => {
+            let b = bytes(v)?;
+            (b.len() == 4).then(|| {
+                format!("{:04}:{:02}:{:02}", (b[0] as u16) << 8 | b[1] as u16, b[2], b[3])
+            })
+        }
+        "Time" => {
+            let b = bytes(v)?;
+            (b.len() >= 3).then(|| format!("{:02}:{:02}:{:02}", b[0], b[1], b[2]))
+        }
+        // Firmware versions: 4 bytes "encrypted" by toggling all bits, then
+        // formatted "d.dd.dd.dd".
+        "DSPFirmwareVersion" | "CPUFirmwareVersion" => {
+            let b = bytes(v)?;
+            (b.len() == 4).then(|| {
+                let a: Vec<u8> = b.iter().map(|x| x ^ 0xff).collect();
+                format!("{}.{:02}.{:02}.{:02}", a[0], a[1], a[2], a[3])
+            })
+        }
+        // ImageEditing: 4 int8u (stored undef) looked up as a space-joined key.
+        "ImageEditing" => {
+            let key =
+                bytes(v)?.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" ");
+            Some(
+                match key.as_str() {
+                    "0 0" | "0 0 0 0" => "None",
+                    "0 0 0 4" => "Digital Filter",
+                    "1 0 0 0" => "Resized",
+                    "2 0 0 0" => "Cropped",
+                    "4 0 0 0" => "Digital Filter 4",
+                    "6 0 0 0" => "Digital Filter 6",
+                    "8 0 0 0" => "Red-eye Correction",
+                    "16 0 0 0" => "Frame Synthesis?",
+                    _ => return Some(key),
+                }
+                .to_string(),
+            )
+        }
 
         // --- AEInfo / CameraSettings exposure-value conversions (Pentax.pm). ---
         // Each tag stores a raw integer that ExifTool turns into a real exposure
