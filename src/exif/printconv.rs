@@ -313,7 +313,7 @@ pub fn print_exposure_time(v: f64) -> String {
 }
 
 /// ExifTool's PrintFNumber: round to 1 decimal place, or 2 for values < 1.0.
-fn print_fnumber(v: f64) -> String {
+pub fn print_fnumber(v: f64) -> String {
     if v > 0.0 {
         if v < 1.0 {
             format!("{:.2}", v)
