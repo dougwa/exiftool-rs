@@ -105,3 +105,44 @@ fn nikon_maker_notes() {
     assert_tag(&m, "ColorMode", "Color");
     assert_tag(&m, "MakerNoteVersion", "1.00");
 }
+
+#[test]
+fn vendor_maker_notes() {
+    // Signature-dispatched vendor IFDs (Olympus host-base, Olympus2 mn-relative,
+    // FujiFilm pointer+mn-relative, Pentax "AOC\0", signatureless Casio/Minolta).
+    let oly = tags("Olympus.jpg");
+    assert_tag(&oly, "Macro", "Off");
+    assert_tag(&oly, "FocalPlaneDiagonal", "7.8 mm"); // PrintConv "$val mm"
+    assert_tag(&oly, "SpecialMode", "Normal, Sequence: 0, Panorama: (none)");
+
+    let pana = tags("Panasonic.jpg");
+    assert_tag(&pana, "FirmwareVersion", "0.1.0.8"); // undef bytes -> dotted
+
+    let fuji = tags("FujiFilm.jpg");
+    assert_tag(&fuji, "Version", "0130"); // printable undef rendered verbatim
+
+    let sigma = tags("Sigma.jpg");
+    assert_tag(&sigma, "Quality", "12"); // "Qual:12" label stripped
+
+    let casio = tags("Casio.jpg");
+    assert_tag(&casio, "ObjectDistance", "2.5 m"); // mm/1000 + " m"
+
+    let pentax = tags("Pentax.jpg");
+    assert_tag(&pentax, "PentaxVersion", "3.0.0.0"); // tr/ /./
+    assert_tag(&pentax, "PreviewImageSize", "640x480"); // tr/ /x/
+
+    let minolta = tags("Minolta.jpg");
+    assert_tag(&minolta, "MakerNoteVersion", "MLT0");
+}
+
+#[test]
+fn canon_binary_record_conversions() {
+    let m = tags("Canon.jpg");
+    // CanonModelID lookup, ShotInfo ValueConv formulas, RawConv n/a suppression.
+    assert_tag(&m, "CanonModelID", "EOS Digital Rebel / 300D / Kiss Digital");
+    assert_tag(&m, "BaseISO", "100");
+    assert_tag(&m, "MeasuredEV", "-1.25");
+    assert_tag(&m, "OpticalZoomCode", "n/a");
+    // AESetting has RawConv '$val==-1 ? undef' and the value is -1: suppressed.
+    assert!(!m.contains_key("AESetting"), "AESetting (-1) should be suppressed");
+}

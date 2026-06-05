@@ -63,12 +63,20 @@ fn format_string(input: &str) -> String {
 /// couple of formula tags.
 pub fn special(name: &str, v: &Value) -> Option<String> {
     match name {
-        // undef[4] of digit *values* (e.g. 00 01 00 00) -> "1.00".
+        // MakerNoteVersion: ExifTool inserts a "." after the first two digits
+        // and strips a leading zero. The 4 bytes are either raw digit *values*
+        // (e.g. 00 01 00 00 -> "1.00") or ASCII digits (e.g. "0210" -> "2.10").
         "MakerNoteVersion" => {
             if let Value::Bytes(b) = v {
                 if b.len() == 4 && b.iter().all(|&c| c < 10) {
                     return Some(format!("{}.{}{}", b[0] as u32 * 10 + b[1] as u32, b[2], b[3]));
                 }
+            }
+            let s = v.to_string();
+            let d = s.as_bytes();
+            if d.len() == 4 && d.iter().all(|c| c.is_ascii_digit()) {
+                let major: u32 = s[0..2].parse().ok()?;
+                return Some(format!("{}.{}", major, &s[2..4]));
             }
             None
         }
