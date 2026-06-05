@@ -113,6 +113,27 @@ pub fn minolta(name: &str, v: &Value) -> Option<String> {
             let d = v.as_f64()? / 1000.0;
             Some(if d == 0.0 { "inf".into() } else { format!("{} m", format_g(d, 10)) })
         }
+        // Date/Time packed into an int: yyyy<<16 | mm<<8 | dd (and hh/mm/ss).
+        "MinoltaDate" => {
+            let n = v.as_i64()?;
+            Some(format!("{}:{:02}:{:02}", n >> 16, (n & 0xff00) >> 8, n & 0xff))
+        }
+        "MinoltaTime" => {
+            let n = v.as_i64()?;
+            Some(format!("{:02}:{:02}:{:02}", n >> 16, (n & 0xff00) >> 8, n & 0xff))
+        }
+        // APEX max aperture: 2^((v-8)/16), printed "%.1f".
+        "MaxAperture" => Some(format!("{:.1}", 2f64.powf((v.as_f64()? - 8.0) / 16.0))),
+        // White-balance gains stored *256.
+        "ColorBalanceRed" | "ColorBalanceGreen" | "ColorBalanceBlue" => {
+            Some(format_g(v.as_f64()? / 256.0, 10))
+        }
+        // Brightness: v/8 - 6.
+        "Brightness" => Some(format_g(v.as_f64()? / 8.0 - 6.0, 10)),
+        // Flash exposure comp: (v-6)/3 EV, printed as a fraction.
+        "FlashExposureComp" => Some(printconv::print_fraction((v.as_f64()? - 6.0) / 3.0)),
+        // ColorFilter: v - 3 (the DiMAGE A2's -5 variant is not modelled here).
+        "ColorFilter" => Some(format_g(v.as_f64()? - 3.0, 10)),
         _ => None,
     }
 }
