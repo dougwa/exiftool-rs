@@ -136,6 +136,31 @@ fn vendor_maker_notes() {
 }
 
 #[test]
+fn composite_tags() {
+    let m = tags("Canon.jpg");
+    // Simple composites.
+    assert_tag(&m, "Aperture", "14.0"); // FNumber
+    assert_tag(&m, "ShutterSpeed", "4"); // ExposureTime preferred over raw BulbDuration
+    assert_tag(&m, "ImageSize", "8x8");
+    assert_tag(&m, "Megapixels", "0.000064");
+    // Derived chain: ScaleFactor35efl (Canon sensor-diag) -> CoC -> FOV / DOF.
+    assert_tag(&m, "ScaleFactor35efl", "1.6");
+    assert_tag(&m, "CircleOfConfusion", "0.019 mm");
+    assert_tag(&m, "FocalLength35efl", "34.0 mm (35 mm equivalent: 54.0 mm)");
+    assert_tag(&m, "FOV", "36.9 deg");
+    assert_tag(&m, "HyperfocalDistance", "4.37 m");
+    assert_tag(&m, "LightValue", "5.6");
+}
+
+#[test]
+fn composite_shutterspeed_from_apex() {
+    // GPS.jpg has no ExposureTime; ShutterSpeed comes from ShutterSpeedValue
+    // (APEX), which must be converted (2^-Tv) before PrintExposureTime.
+    let m = tags("GPS.jpg");
+    assert_tag(&m, "ShutterSpeed", "1/724");
+}
+
+#[test]
 fn canon_binary_record_conversions() {
     let m = tags("Canon.jpg");
     // CanonModelID lookup, ShotInfo ValueConv formulas, RawConv n/a suppression.

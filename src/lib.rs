@@ -13,6 +13,7 @@
 //! PrintConv (human-readable) rendering.
 
 pub mod cli;
+pub mod composite;
 pub mod datetime;
 pub mod error;
 pub mod exif;
@@ -59,6 +60,10 @@ pub fn extract_from_path(path: &Path) -> Result<Vec<ExtractedTag>> {
             tags.extend(format_tags);
         }
     }
+
+    // 4. Composite tags computed from the extracted set (ExifTool's Composite
+    //    group): Aperture, ShutterSpeed, ImageSize, FOV, DOF, etc.
+    composite::compute(&mut tags);
 
     Ok(tags)
 }

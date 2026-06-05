@@ -64,6 +64,15 @@ maker-note modules can be layered on.
 * **Filesystem pseudo-tags** (the `File`/`System` group): name, directory, size
   (`ConvertFileSize`), modify/access/inode-change timestamps in local time,
   permissions, file type, MIME type.
+* **Composite tags** (the `Composite` group, `composite.rs`): post-extraction
+  tags computed from other tags via a multi-pass dependency-ordered engine that
+  resolves each composite's `Require`/`Desire` sources by name (respecting
+  group-qualified sources like `Composite:DigitalZoom`). Ported formulas:
+  `Aperture`, `ShutterSpeed` (incl. APEX `ShutterSpeedValue`/`ApertureValue`
+  conversion), `ImageSize`, `Megapixels`, `ScaleFactor35efl` (with Canon's
+  rational-denominator sensor-diagonal algorithm and the general
+  focal-plane-resolution path), `CircleOfConfusion`, `FocalLength35efl`, `FOV`,
+  `HyperfocalDistance`, `DOF`, and `LightValue`.
 
 ## Parity
 
@@ -71,19 +80,20 @@ Measured against the reference `exiftool` across the JPEG images in ExifTool's
 own test suite, comparing every shared tag's printed value:
 
 ```
-all test JPEGs   2304 exact tag-value matches vs  96 mismatches
-Canon.jpg         113 / 162 shared tags (only the cross-group MeteringMode left)
-Nikon.jpg          65 /  80
+all test JPEGs   2566 exact tag-value matches vs 109 mismatches
+Canon.jpg         123 / 162 shared tags (all composites correct; only the
+                  cross-group MeteringMode and a 0.06 m DOF rounding left)
+Nikon.jpg          71 /  80
 ```
 
-With maker-note support for thirteen vendors, exiftool-rs now extracts several
-hundred more correct tags across the suite than the EXIF-only foundation did
-(e.g. Sanyo 83, Pentax 89, Panasonic 77, FujiFilm 69 shared-tag matches, all
-from a standing start of zero). The remaining differences are things still not
-implemented (see below): the long tail of vendor binary **sub-records**, the
-full lens databases, and ExifTool's cross-group **Composite/priority** system
-(which accounts for the handful of remaining same-named mismatches such as
-maker-note vs EXIF `MeteringMode`).
+With maker-note support for thirteen vendors plus composite tags, exiftool-rs
+now extracts several hundred more correct tags across the suite than the
+EXIF-only foundation did (e.g. Sanyo 93, Pentax 99, Panasonic 87, FujiFilm 77
+shared-tag matches). The remaining differences are things still not implemented
+(see below): vendor binary **sub-records** (which is where the `FocusDistance`
+that would complete `FOV`/`DOF` lives), the full lens databases, and ExifTool's
+cross-group **priority/duplicate** system (the maker-note vs EXIF `MeteringMode`
+case).
 
 ## Not implemented (by design, for now)
 
