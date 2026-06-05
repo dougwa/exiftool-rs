@@ -1,0 +1,17 @@
+[package]
+name = "exiftool-rs"
+version = "0.1.0"
+edition = "2021"
+description = "A Rust reimplementation of the core of ExifTool for reading media metadata"
+license = "MIT"
+
+[[bin]]
+name = "exiftool-rs"
+path = "src/main.rs"
+
+[lib]
+name = "exiftool_rs"
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
