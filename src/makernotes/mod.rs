@@ -34,6 +34,10 @@ pub enum MnKind {
     Scalar { name: &'static str, pc: Pc, bin: bool, skip: Skip },
     /// A pointer to a ProcessBinaryData record.
     Binary(&'static BinTable),
+    /// A pointer (EXIF `ifd` format) to a nested maker-note IFD, e.g. Olympus's
+    /// Equipment / CameraSettings / FocusInfo sub-directories. The offset is
+    /// relative to the same `base` as the parent IFD.
+    SubIfd(&'static [MnTag]),
 }
 
 /// Dispatch the maker note at `mn_off` (length `mn_len`) within the host TIFF
@@ -72,7 +76,6 @@ pub fn walk_ifd(
 /// some Ricoh) store offsets relative to the maker-note start rather than the
 /// TIFF base; for those, `base` is the maker-note offset. Host-base vendors
 /// (Canon, Sony, Sanyo, Sigma, Panasonic, …) pass `base = 0`.
-#[allow(clippy::too_many_arguments)]
 pub fn walk_ifd_based(
     r: &Reader,
     off: usize,
@@ -81,6 +84,22 @@ pub fn walk_ifd_based(
     group1: &str,
     special: Special,
     out: &mut Vec<ExtractedTag>,
+) {
+    walk_ifd_depth(r, off, base, table, group1, special, out, 0);
+}
+
+/// Depth-limited core of the maker-note IFD walk (the limit guards against
+/// circular or malformed sub-IFD pointers).
+#[allow(clippy::too_many_arguments)]
+fn walk_ifd_depth(
+    r: &Reader,
+    off: usize,
+    base: usize,
+    table: &[MnTag],
+    group1: &str,
+    special: Special,
+    out: &mut Vec<ExtractedTag>,
+    depth: u8,
 ) {
     let count = match r.u16(off) {
         Some(c) => c as usize,
@@ -116,6 +135,14 @@ pub fn walk_ifd_based(
             MnKind::Binary(bin) => {
                 if let Some(raw) = r.bytes(voff, total) {
                     binary::process(raw, r.order, bin, group1, special, out);
+                }
+            }
+            MnKind::SubIfd(sub) => {
+                // The value is an offset (relative to `base`) to a nested IFD.
+                if depth < 4 {
+                    if let Some(p) = r.u32(voff) {
+                        walk_ifd_depth(r, base + p as usize, base, sub, group1, special, out, depth + 1);
+                    }
                 }
             }
             MnKind::Scalar { name, pc, bin, skip } => {

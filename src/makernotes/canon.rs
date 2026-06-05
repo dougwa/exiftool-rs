@@ -4,6 +4,7 @@
 //! ProcessBinaryData sub-records (CameraSettings, ShotInfo, FocalLength) pointed
 //! to by the IFD's first few tags; the rest are scalar strings/numbers.
 
+mod canon_afinfo;
 mod canon_camera_settings;
 mod canon_focal_length;
 mod canon_model_id;
@@ -13,6 +14,7 @@ use super::binary::{Pc, Skip};
 use super::{MnKind, MnTag};
 use crate::value::{format_g, Value};
 
+use canon_afinfo::CANON_AFINFO;
 use canon_camera_settings::CANON_CAMERA_SETTINGS;
 use canon_focal_length::CANON_FOCAL_LENGTH;
 use canon_model_id::CANON_MODEL_ID;
@@ -145,6 +147,7 @@ pub static CANON_MAIN: &[MnTag] = &[
     MnTag { id: 0x1, kind: MnKind::Binary(&CANON_CAMERA_SETTINGS) },
     MnTag { id: 0x2, kind: MnKind::Binary(&CANON_FOCAL_LENGTH) },
     MnTag { id: 0x4, kind: MnKind::Binary(&CANON_SHOT_INFO) },
+    MnTag { id: 0x12, kind: MnKind::Binary(&CANON_AFINFO) },
     // Scalar tags (read with the IFD entry's own format).
     MnTag { id: 0x6, kind: MnKind::Scalar { name: "CanonImageType", pc: Pc::None, bin: false, skip: Skip::Never } },
     MnTag { id: 0x7, kind: MnKind::Scalar { name: "CanonFirmwareVersion", pc: Pc::None, bin: false, skip: Skip::Never } },

@@ -2,19 +2,19 @@
 use crate::makernotes::binary::{Pc, Skip};
 use crate::makernotes::{MnKind, MnTag};
 
-static NIKON_MAIN_PC_0: &[(i64, &str)] = &[(7, "Fired, External"), (1, "Fired, Manual"), (9, "Fired, TTL Mode"), (18, "LED Light"), (0, "Did Not Fire"), (3, "Not Ready"), (8, "Fired, Commander Mode")];
-static NIKON_MAIN_PC_1: &[(i64, &str)] = &[(2, "Uncompressed"), (1, "Lossy (type 1)"), (7, "Unpacked 12 bits"), (10, "Packed 14 bits"), (14, "High Efficiency*"), (4, "Lossy (type 2)"), (13, "High Efficiency"), (5, "Striped packed 12 bits"), (3, "Lossless"), (9, "Packed 12 bits"), (6, "Uncompressed (reduced to 12 bit)"), (8, "Small")];
-static NIKON_MAIN_PC_2: &[(i64, &str)] = &[(0, "Off"), (3, "Date Counter"), (1, "Date & Time"), (2, "Date")];
-static NIKON_MAIN_PC_3: &[(i64, &str)] = &[(6, "High"), (0, "Off"), (3, "Medium Low"), (1, "Minimal"), (5, "Medium High"), (2, "Low"), (4, "Normal")];
-static NIKON_MAIN_PC_4: &[(i64, &str)] = &[(1, "On"), (0, "Off")];
-static NIKON_MAIN_PC_5: &[(i64, &str)] = &[(4, "3:2 Crop"), (15, "1.5x Movie Crop"), (17, "FX 1:1 Crop"), (9, "DX Movie 16:9 Crop"), (6, "16:9 Crop"), (11, "FX Uncropped"), (3, "5:4 Crop"), (0, "Off"), (12, "DX Uncropped"), (10, "1.3x Movie Crop"), (14, "1.4x Movie Crop"), (13, "2.8x Movie Crop"), (18, "DX 1:1 Crop"), (8, "2.7x Crop"), (2, "DX Crop"), (1, "1.3x Crop")];
-static NIKON_MAIN_PC_6: &[(i64, &str)] = &[(4, "BT.2100"), (2, "Adobe RGB"), (1, "sRGB")];
-static NIKON_MAIN_PC_7: &[(i64, &str)] = &[(1, "On"), (0, "Off")];
-static NIKON_MAIN_PC_8: &[(i64, &str)] = &[(5, "High"), (65535, "Auto"), (11, "Extra High 4"), (0, "Off"), (3, "Normal"), (9, "Extra High 2"), (8, "Extra High 1"), (1, "Low"), (7, "Extra High"), (10, "Extra High 3")];
-static NIKON_MAIN_PC_9: &[(&str, &str)] = &[("14 0 0 0", "14"), ("8 8 8 0", "8 x 3"), ("0 0 0 0", "n/a (JPEG)"), ("16 16 16 0", "16 x 3"), ("12 0 0 0", "12")];
-static NIKON_MAIN_PC_10: &[(i64, &str)] = &[(5, "High"), (1, "Low"), (3, "Normal"), (0, "Off")];
-static NIKON_MAIN_PC_11: &[(i64, &str)] = &[(81, "Auto (Electronic Front Curtain)"), (96, "Electronic (High Speed)"), (48, "Electronic Front Curtain"), (80, "Auto (Mechanical)"), (64, "Electronic (Movie)"), (16, "Electronic"), (0, "Mechanical")];
-static NIKON_MAIN_PC_12: &[(i64, &str)] = &[(1, "Large"), (2, "Medium"), (3, "Small")];
+static NIKON_MAIN_PC_0: &[(i64, &str)] = &[(18, "LED Light"), (8, "Fired, Commander Mode"), (3, "Not Ready"), (0, "Did Not Fire"), (1, "Fired, Manual"), (7, "Fired, External"), (9, "Fired, TTL Mode")];
+static NIKON_MAIN_PC_1: &[(i64, &str)] = &[(13, "High Efficiency"), (5, "Striped packed 12 bits"), (4, "Lossy (type 2)"), (1, "Lossy (type 1)"), (7, "Unpacked 12 bits"), (3, "Lossless"), (9, "Packed 12 bits"), (6, "Uncompressed (reduced to 12 bit)"), (2, "Uncompressed"), (10, "Packed 14 bits"), (8, "Small"), (14, "High Efficiency*")];
+static NIKON_MAIN_PC_2: &[(i64, &str)] = &[(2, "Date"), (3, "Date Counter"), (1, "Date & Time"), (0, "Off")];
+static NIKON_MAIN_PC_3: &[(i64, &str)] = &[(2, "Low"), (6, "High"), (5, "Medium High"), (3, "Medium Low"), (1, "Minimal"), (4, "Normal"), (0, "Off")];
+static NIKON_MAIN_PC_4: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
+static NIKON_MAIN_PC_5: &[(i64, &str)] = &[(11, "FX Uncropped"), (13, "2.8x Movie Crop"), (1, "1.3x Crop"), (4, "3:2 Crop"), (15, "1.5x Movie Crop"), (3, "5:4 Crop"), (18, "DX 1:1 Crop"), (9, "DX Movie 16:9 Crop"), (2, "DX Crop"), (6, "16:9 Crop"), (17, "FX 1:1 Crop"), (0, "Off"), (12, "DX Uncropped"), (14, "1.4x Movie Crop"), (10, "1.3x Movie Crop"), (8, "2.7x Crop")];
+static NIKON_MAIN_PC_6: &[(i64, &str)] = &[(1, "sRGB"), (4, "BT.2100"), (2, "Adobe RGB")];
+static NIKON_MAIN_PC_7: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
+static NIKON_MAIN_PC_8: &[(i64, &str)] = &[(9, "Extra High 2"), (11, "Extra High 4"), (5, "High"), (7, "Extra High"), (1, "Low"), (65535, "Auto"), (0, "Off"), (3, "Normal"), (10, "Extra High 3"), (8, "Extra High 1")];
+static NIKON_MAIN_PC_9: &[(&str, &str)] = &[("0 0 0 0", "n/a (JPEG)"), ("8 8 8 0", "8 x 3"), ("14 0 0 0", "14"), ("12 0 0 0", "12"), ("16 16 16 0", "16 x 3")];
+static NIKON_MAIN_PC_10: &[(i64, &str)] = &[(0, "Off"), (1, "Low"), (3, "Normal"), (5, "High")];
+static NIKON_MAIN_PC_11: &[(i64, &str)] = &[(64, "Electronic (Movie)"), (80, "Auto (Mechanical)"), (0, "Mechanical"), (96, "Electronic (High Speed)"), (48, "Electronic Front Curtain"), (16, "Electronic"), (81, "Auto (Electronic Front Curtain)")];
+static NIKON_MAIN_PC_12: &[(i64, &str)] = &[(2, "Medium"), (3, "Small"), (1, "Large")];
 static NIKON_MAIN_PC_13: &[(i64, &str)] = &[(3, "Optimal Quality"), (1, "Size Priority")];
 
 pub static NIKON_MAIN: &[MnTag] = &[

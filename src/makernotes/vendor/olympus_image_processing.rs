@@ -1,0 +1,78 @@
+// Auto-generated from ExifTool via /tmp/dump_table.pl. Do not edit by hand.
+use crate::makernotes::binary::{Pc, Skip};
+use crate::makernotes::{MnKind, MnTag};
+
+static OLYMPUS_IMAGE_PROCESSING_PC_0: &[(i64, &str)] = &[(0, "(none)")];
+static OLYMPUS_IMAGE_PROCESSING_PC_1: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
+static OLYMPUS_IMAGE_PROCESSING_PC_2: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
+static OLYMPUS_IMAGE_PROCESSING_PC_3: &[(&str, &str)] = &[("2 1", "3:2 (RAW)"), ("3 3", "16:9"), ("6 6", "7:6"), ("9 9", "3:4"), ("5 5", "5:4"), ("7 7", "6:5"), ("1 4", "1:1"), ("4 4", "6:6"), ("3 1", "16:9 (RAW)"), ("4 1", "1:1 (RAW)"), ("1 1", "4:3"), ("9 1", "3:4 (RAW)"), ("8 8", "7:5"), ("2 2", "3:2")];
+static OLYMPUS_IMAGE_PROCESSING_PC_4: &[(&str, &str)] = &[("0 1", "On"), ("0 0", "Off")];
+static OLYMPUS_IMAGE_PROCESSING_PC_5: &[(i64, &str)] = &[(1, "Horizontal"), (0, "Vertical")];
+static OLYMPUS_IMAGE_PROCESSING_PC_6: &[(i64, &str)] = &[(1, "Medium"), (0, "High"), (2, "Soft")];
+
+pub static OLYMPUS_IMAGE_PROCESSING: &[MnTag] = &[
+    MnTag { id: 0, kind: MnKind::Scalar { name: "ImageProcessingVersion", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 1536, kind: MnKind::Scalar { name: "BlackLevel2", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 1552, kind: MnKind::Scalar { name: "GainBase", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 1553, kind: MnKind::Scalar { name: "ValidBits", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 1554, kind: MnKind::Scalar { name: "CropLeft", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 1555, kind: MnKind::Scalar { name: "CropTop", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 1556, kind: MnKind::Scalar { name: "CropWidth", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 1557, kind: MnKind::Scalar { name: "CropHeight", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 1589, kind: MnKind::Scalar { name: "UnknownBlock1", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 1590, kind: MnKind::Scalar { name: "UnknownBlock2", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 2053, kind: MnKind::Scalar { name: "SensorCalibration", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 256, kind: MnKind::Scalar { name: "WB_RBLevels", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 258, kind: MnKind::Scalar { name: "WB_RBLevels3000K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 259, kind: MnKind::Scalar { name: "WB_RBLevels3300K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 260, kind: MnKind::Scalar { name: "WB_RBLevels3600K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 261, kind: MnKind::Scalar { name: "WB_RBLevels3900K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 262, kind: MnKind::Scalar { name: "WB_RBLevels4000K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 263, kind: MnKind::Scalar { name: "WB_RBLevels4300K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 264, kind: MnKind::Scalar { name: "WB_RBLevels4500K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 265, kind: MnKind::Scalar { name: "WB_RBLevels4800K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 266, kind: MnKind::Scalar { name: "WB_RBLevels5300K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 267, kind: MnKind::Scalar { name: "WB_RBLevels6000K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 268, kind: MnKind::Scalar { name: "WB_RBLevels6600K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 269, kind: MnKind::Scalar { name: "WB_RBLevels7500K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 270, kind: MnKind::Scalar { name: "WB_RBLevelsCWB1", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 271, kind: MnKind::Scalar { name: "WB_RBLevelsCWB2", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 272, kind: MnKind::Scalar { name: "WB_RBLevelsCWB3", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 273, kind: MnKind::Scalar { name: "WB_RBLevelsCWB4", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 275, kind: MnKind::Scalar { name: "WB_GLevel3000K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 276, kind: MnKind::Scalar { name: "WB_GLevel3300K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 277, kind: MnKind::Scalar { name: "WB_GLevel3600K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 278, kind: MnKind::Scalar { name: "WB_GLevel3900K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 279, kind: MnKind::Scalar { name: "WB_GLevel4000K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 280, kind: MnKind::Scalar { name: "WB_GLevel4300K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 281, kind: MnKind::Scalar { name: "WB_GLevel4500K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 282, kind: MnKind::Scalar { name: "WB_GLevel4800K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 283, kind: MnKind::Scalar { name: "WB_GLevel5300K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 284, kind: MnKind::Scalar { name: "WB_GLevel6000K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 285, kind: MnKind::Scalar { name: "WB_GLevel6600K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 286, kind: MnKind::Scalar { name: "WB_GLevel7500K", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 287, kind: MnKind::Scalar { name: "WB_GLevel", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 4112, kind: MnKind::Scalar { name: "NoiseReduction2", pc: Pc::Enum(OLYMPUS_IMAGE_PROCESSING_PC_0), bin: false, skip: Skip::Never } },
+    MnTag { id: 4113, kind: MnKind::Scalar { name: "DistortionCorrection2", pc: Pc::Enum(OLYMPUS_IMAGE_PROCESSING_PC_1), bin: false, skip: Skip::Never } },
+    MnTag { id: 4114, kind: MnKind::Scalar { name: "ShadingCompensation2", pc: Pc::Enum(OLYMPUS_IMAGE_PROCESSING_PC_2), bin: false, skip: Skip::Never } },
+    MnTag { id: 4124, kind: MnKind::Scalar { name: "MultipleExposureMode", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 4355, kind: MnKind::Scalar { name: "UnknownBlock3", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 4356, kind: MnKind::Scalar { name: "UnknownBlock4", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 4370, kind: MnKind::Scalar { name: "AspectRatio", pc: Pc::EnumStr(OLYMPUS_IMAGE_PROCESSING_PC_3), bin: false, skip: Skip::Never } },
+    MnTag { id: 4371, kind: MnKind::Scalar { name: "AspectFrame", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 4608, kind: MnKind::Scalar { name: "FacesDetected", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 4609, kind: MnKind::Scalar { name: "FaceDetectArea", pc: Pc::None, bin: true, skip: Skip::Never } },
+    MnTag { id: 4610, kind: MnKind::Scalar { name: "MaxFaces", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 4611, kind: MnKind::Scalar { name: "FaceDetectFrameSize", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 4615, kind: MnKind::Scalar { name: "FaceDetectFrameCrop", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 4870, kind: MnKind::Scalar { name: "CameraTemperature", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 512, kind: MnKind::Scalar { name: "ColorMatrix", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 6400, kind: MnKind::Scalar { name: "KeystoneCompensation", pc: Pc::EnumStr(OLYMPUS_IMAGE_PROCESSING_PC_4), bin: false, skip: Skip::Never } },
+    MnTag { id: 6401, kind: MnKind::Scalar { name: "KeystoneDirection", pc: Pc::Enum(OLYMPUS_IMAGE_PROCESSING_PC_5), bin: false, skip: Skip::Never } },
+    MnTag { id: 6406, kind: MnKind::Scalar { name: "KeystoneValue", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 768, kind: MnKind::Scalar { name: "Enhancer", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 769, kind: MnKind::Scalar { name: "EnhancerValues", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 784, kind: MnKind::Scalar { name: "CoringFilter", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 785, kind: MnKind::Scalar { name: "CoringValues", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 8464, kind: MnKind::Scalar { name: "GNDFilterType", pc: Pc::Enum(OLYMPUS_IMAGE_PROCESSING_PC_6), bin: false, skip: Skip::Never } },
+];

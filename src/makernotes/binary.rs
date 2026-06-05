@@ -101,12 +101,28 @@ impl Skip {
     }
 }
 
+/// How many elements a binary entry reads. Variable counts (ExifTool's
+/// `int16s[$val{N}]`) both read N elements *and* shift every later entry's
+/// position by the extra bytes consumed — the running `varSize` of
+/// `ProcessBinaryData`. Fixed counts read N elements without shifting (matching
+/// ExifTool's non-`var_` bracketed formats).
+#[derive(Clone, Copy)]
+pub enum Count {
+    /// A fixed number of elements (1 for ordinary scalars).
+    Fixed(usize),
+    /// `$val{ix}` elements (e.g. one per AF point); shifts later positions.
+    Var(i32),
+    /// `int(($val{ix}+15)/16)` elements (a bitmask, one bit per point); shifts.
+    VarBits(i32),
+}
+
 pub struct BinTag {
     pub index: i32,
     pub name: &'static str,
     pub fmt: Option<Fmt>,
     pub pc: Pc,
     pub skip: Skip,
+    pub count: Count,
 }
 
 pub struct BinTable {
@@ -125,21 +141,41 @@ pub fn no_special(_name: &str, _v: &Value) -> Option<String> {
     None
 }
 
-/// Read one value of `fmt` at byte offset `off` within `r`.
-fn read_one(r: &Reader, fmt: Fmt, off: usize) -> Option<Value> {
-    Some(match fmt {
-        Fmt::U8 => Value::U(vec![r.u8(off)? as u64]),
-        Fmt::S8 => Value::I(vec![r.u8(off)? as i8 as i64]),
-        Fmt::U16 => Value::U(vec![r.u16(off)? as u64]),
-        Fmt::S16 => Value::I(vec![r.i16(off)? as i64]),
-        Fmt::U32 => Value::U(vec![r.u32(off)? as u64]),
-        Fmt::S32 => Value::I(vec![r.i32(off)? as i64]),
-        Fmt::Str(n) => {
-            let b = r.bytes(off, n)?;
-            let end = b.iter().position(|&c| c == 0).unwrap_or(b.len());
-            Value::Text(String::from_utf8_lossy(&b[..end]).trim_end().to_string())
+/// Read `count` values of `fmt` starting at byte offset `off` within `r`. A
+/// single value yields a 1-element `Value`; multiple values yield a list.
+fn read_array(r: &Reader, fmt: Fmt, off: usize, count: usize) -> Option<Value> {
+    if let Fmt::Str(n) = fmt {
+        let b = r.bytes(off, n)?;
+        let end = b.iter().position(|&c| c == 0).unwrap_or(b.len());
+        return Some(Value::Text(String::from_utf8_lossy(&b[..end]).trim_end().to_string()));
+    }
+    let size = fmt.size();
+    let signed = matches!(fmt, Fmt::S8 | Fmt::S16 | Fmt::S32);
+    if signed {
+        let mut v = Vec::with_capacity(count);
+        for i in 0..count {
+            let o = off + i * size;
+            v.push(match fmt {
+                Fmt::S8 => r.u8(o)? as i8 as i64,
+                Fmt::S16 => r.i16(o)? as i64,
+                Fmt::S32 => r.i32(o)? as i64,
+                _ => unreachable!(),
+            });
         }
-    })
+        Some(Value::I(v))
+    } else {
+        let mut v = Vec::with_capacity(count);
+        for i in 0..count {
+            let o = off + i * size;
+            v.push(match fmt {
+                Fmt::U8 => r.u8(o)? as u64,
+                Fmt::U16 => r.u16(o)? as u64,
+                Fmt::U32 => r.u32(o)? as u64,
+                _ => unreachable!(),
+            });
+        }
+        Some(Value::U(v))
+    }
 }
 
 /// Process a binary-data blob against `table`, appending tags to `out`.
@@ -154,13 +190,36 @@ pub fn process(
 ) {
     let r = Reader::new(data, order);
     let unit = table.default_fmt.size();
+    // Running extra-size accumulator and a map of already-read scalar values
+    // (for `int16s[$val{N}]`-style count expressions). Entries must be visited
+    // in index order, which the generated tables guarantee.
+    let mut var_size: usize = 0;
+    let mut vals: Vec<(i32, i64)> = Vec::new();
+    let lookup = |vals: &[(i32, i64)], ix: i32| -> i64 {
+        vals.iter().find(|(k, _)| *k == ix).map(|(_, v)| *v).unwrap_or(0)
+    };
+
     for t in table.tags {
-        let byte_off = t.index as usize * unit;
         let fmt = t.fmt.unwrap_or(table.default_fmt);
-        let value = match read_one(&r, fmt, byte_off) {
+        let elsize = fmt.size();
+        let (count, shifts) = match t.count {
+            Count::Fixed(n) => (n, false),
+            Count::Var(ix) => (lookup(&vals, ix).max(0) as usize, true),
+            Count::VarBits(ix) => (((lookup(&vals, ix).max(0) + 15) / 16) as usize, true),
+        };
+        let byte_off = (t.index as usize).wrapping_mul(unit) + var_size;
+        let value = match read_array(&r, fmt, byte_off, count) {
             Some(v) => v,
             None => continue, // past end of record
         };
+        // Variable-length arrays shift every subsequent entry's position.
+        if shifts {
+            var_size += count.saturating_mul(elsize).saturating_sub(unit);
+        }
+        // Remember the (scalar) value so later count expressions can reference it.
+        if let Some(n) = value.as_i64() {
+            vals.push((t.index, n));
+        }
         if t.skip.suppresses(&value) {
             continue; // ExifTool RawConv => undef (n/a sentinel)
         }
