@@ -6,6 +6,7 @@
 //! embedded header, so we parse it as an independent sub-TIFF. Older "headerless"
 //! Nikon notes (no signature) are a bare IFD relative to the host TIFF base.
 
+mod nikon_afinfo;
 mod nikon_main;
 
 use super::walk_ifd;
