@@ -134,6 +134,26 @@ fn nikon_shooting_mode(val: i64) -> String {
     out
 }
 
+/// Port of Nikon's `%afPoints11` BITMASK PrintConv (AFInfo `AFPointsInFocus`):
+/// 0 and 0x7ff are named directly, otherwise each set bit names an AF point.
+fn nikon_af_points_11(val: i64) -> String {
+    match val {
+        0 => return "(none)".into(),
+        0x7ff => return "All 11 Points".into(),
+        _ => {}
+    }
+    const PTS: [&str; 11] = [
+        "Center", "Top", "Bottom", "Mid-left", "Mid-right", "Upper-left", "Upper-right",
+        "Lower-left", "Lower-right", "Far Left", "Far Right",
+    ];
+    let parts: Vec<&str> = (0..11).filter(|b| val & (1 << b) != 0).map(|b| PTS[b as usize]).collect();
+    if parts.is_empty() {
+        format!("Unknown ({val})")
+    } else {
+        parts.join(", ")
+    }
+}
+
 /// Nikon special converter: the table-default FormatString for strings, plus a
 /// couple of formula tags.
 pub fn special(name: &str, v: &Value) -> Option<String> {
@@ -166,6 +186,8 @@ pub fn special(name: &str, v: &Value) -> Option<String> {
         "ShootingMode" => Some(nikon_shooting_mode(v.as_i64()?)),
         // SensorPixelSize: two rationals -> "X x Y um".
         "SensorPixelSize" => Some(format!("{} um", v.to_string().replacen(' ', " x ", 1))),
+        // AFPointsInFocus: afPoints11 BITMASK.
+        "AFPointsInFocus" => Some(nikon_af_points_11(v.as_i64()?)),
         // LensFStops: 3 *unsigned* bytes a,b,c -> a*(b/c), printed "%.2f".
         "LensFStops" => {
             let b = match v {
