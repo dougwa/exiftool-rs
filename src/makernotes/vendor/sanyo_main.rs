@@ -2,23 +2,23 @@
 use crate::makernotes::binary::{Pc, Skip};
 use crate::makernotes::{MnKind, MnTag};
 
-static SANYO_MAIN_PC_0: &[(i64, &str)] = &[(2, "Normal/Medium Low"), (4, "Normal/Medium High"), (259, "Fine/Medium"), (518, "Super Fine/Very High"), (3, "Normal/Medium"), (512, "Super Fine/Very Low"), (260, "Fine/Medium High"), (1, "Normal/Low"), (5, "Normal/High"), (256, "Fine/Very Low"), (262, "Fine/Very High"), (7, "Normal/Super High"), (0, "Normal/Very Low"), (257, "Fine/Low"), (514, "Super Fine/Medium Low"), (517, "Super Fine/High"), (6, "Normal/Very High"), (515, "Super Fine/Medium"), (516, "Super Fine/Medium High"), (261, "Fine/High"), (263, "Fine/Super High"), (519, "Super Fine/Super High"), (258, "Fine/Medium Low"), (513, "Super Fine/Low")];
-static SANYO_MAIN_PC_1: &[(i64, &str)] = &[(0, "Normal"), (1, "Macro"), (2, "View"), (3, "Manual")];
+static SANYO_MAIN_PC_0: &[(i64, &str)] = &[(1, "Normal/Low"), (0, "Normal/Very Low"), (261, "Fine/High"), (262, "Fine/Very High"), (6, "Normal/Very High"), (263, "Fine/Super High"), (259, "Fine/Medium"), (519, "Super Fine/Super High"), (7, "Normal/Super High"), (512, "Super Fine/Very Low"), (513, "Super Fine/Low"), (514, "Super Fine/Medium Low"), (3, "Normal/Medium"), (257, "Fine/Low"), (5, "Normal/High"), (515, "Super Fine/Medium"), (2, "Normal/Medium Low"), (258, "Fine/Medium Low"), (256, "Fine/Very Low"), (4, "Normal/Medium High"), (516, "Super Fine/Medium High"), (518, "Super Fine/Very High"), (260, "Fine/Medium High"), (517, "Super Fine/High")];
+static SANYO_MAIN_PC_1: &[(i64, &str)] = &[(2, "View"), (3, "Manual"), (0, "Normal"), (1, "Macro")];
 static SANYO_MAIN_PC_2: &[(i64, &str)] = &[(3, "Adjust Exposure"), (1, "Standard"), (0, "None"), (2, "Best")];
-static SANYO_MAIN_PC_3: &[(i64, &str)] = &[(1, "On"), (0, "Off")];
-static SANYO_MAIN_PC_4: &[(i64, &str)] = &[(1, "On"), (0, "Off")];
-static SANYO_MAIN_PC_5: &[(i64, &str)] = &[(1, "On"), (0, "Off")];
-static SANYO_MAIN_PC_6: &[(i64, &str)] = &[(1, "On"), (0, "Off")];
-static SANYO_MAIN_PC_7: &[(i64, &str)] = &[(1, "On"), (0, "Off")];
-static SANYO_MAIN_PC_8: &[(i64, &str)] = &[(1, "Press start, press stop"), (0, "Record while down")];
-static SANYO_MAIN_PC_9: &[(i64, &str)] = &[(1, "On"), (0, "Off")];
-static SANYO_MAIN_PC_10: &[(i64, &str)] = &[(1, "On"), (0, "Off")];
-static SANYO_MAIN_PC_11: &[(i64, &str)] = &[(1, "On"), (0, "Off")];
-static SANYO_MAIN_PC_12: &[(i64, &str)] = &[(1, "On"), (0, "Off")];
+static SANYO_MAIN_PC_3: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
+static SANYO_MAIN_PC_4: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
+static SANYO_MAIN_PC_5: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
+static SANYO_MAIN_PC_6: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
+static SANYO_MAIN_PC_7: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
+static SANYO_MAIN_PC_8: &[(i64, &str)] = &[(0, "Record while down"), (1, "Press start, press stop")];
+static SANYO_MAIN_PC_9: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
+static SANYO_MAIN_PC_10: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
+static SANYO_MAIN_PC_11: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
+static SANYO_MAIN_PC_12: &[(i64, &str)] = &[(0, "Off"), (1, "On")];
 static SANYO_MAIN_PC_13: &[(i64, &str)] = &[(1, "Yes"), (0, "No")];
-static SANYO_MAIN_PC_14: &[(i64, &str)] = &[(6, "Lamp"), (5, "User 2"), (1, "Sport"), (2, "TV"), (0, "Off"), (4, "User 1"), (3, "Night")];
-static SANYO_MAIN_PC_15: &[(i64, &str)] = &[(3, "20 frames/s"), (0, "5 frames/s"), (1, "10 frames/s"), (2, "15 frames/s")];
-static SANYO_MAIN_PC_16: &[(i64, &str)] = &[(2, "Disabled"), (1, "Force"), (0, "Auto"), (3, "Red eye")];
+static SANYO_MAIN_PC_14: &[(i64, &str)] = &[(6, "Lamp"), (2, "TV"), (1, "Sport"), (0, "Off"), (5, "User 2"), (3, "Night"), (4, "User 1")];
+static SANYO_MAIN_PC_15: &[(i64, &str)] = &[(2, "15 frames/s"), (3, "20 frames/s"), (0, "5 frames/s"), (1, "10 frames/s")];
+static SANYO_MAIN_PC_16: &[(i64, &str)] = &[(1, "Force"), (0, "Auto"), (3, "Red eye"), (2, "Disabled")];
 
 pub static SANYO_MAIN: &[MnTag] = &[
     MnTag { id: 255, kind: MnKind::Scalar { name: "MakerNoteOffset", pc: Pc::None, bin: false, skip: Skip::Never } },

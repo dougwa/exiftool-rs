@@ -80,10 +80,10 @@ Measured against the reference `exiftool` across the JPEG images in ExifTool's
 own test suite, comparing every shared tag's printed value:
 
 ```
-all test JPEGs   2566 exact tag-value matches vs 109 mismatches
-Canon.jpg         123 / 162 shared tags (all composites correct; only the
-                  cross-group MeteringMode and a 0.06 m DOF rounding left)
-Nikon.jpg          71 /  80
+all test JPEGs   2672 exact tag-value matches
+Canon.jpg         133 / 162 shared tags (AFInfo AF-point arrays + composites)
+Olympus2.jpg      116 / 145 (Equipment / CameraSettings / FocusInfo sub-IFDs)
+Pentax.jpg        128 / 205 (CameraSettings / AEInfo / LensInfo / … records)
 ```
 
 With maker-note support for thirteen vendors plus composite tags, exiftool-rs
@@ -97,15 +97,17 @@ case).
 
 ## Not implemented (by design, for now)
 
-* **Vendor binary sub-records** (`SubDirectory` ProcessBinaryData blocks such as
-  Canon AFInfo/ColorData, Nikon AFInfo/LensData, and Sony's Tag9xxx records).
-  The main IFD of each of the thirteen supported vendors is parsed; the nested
-  binary sub-records — which is where Sony in particular keeps nearly everything
-  — are skipped for now. Variable-format records (whose element count depends on
-  a sibling tag, e.g. Canon AFInfo) also need a richer binary engine.
-* **Composite tags** and ExifTool's cross-group **priority/duplicate** system
-  (e.g. the Composite `GPSAltitude` that merges altitude + reference, or
-  SubSec-augmented dates).
+* **Some vendor binary sub-records.** The maker-note `SubDirectory` mechanism is
+  implemented — both nested IFDs (`MnKind::SubIfd`, e.g. Olympus
+  Equipment/CameraSettings/FocusInfo/ImageProcessing) and ProcessBinaryData
+  blocks (Canon AFInfo, Minolta CameraSettings, Pentax
+  CameraSettings/AEInfo/LensInfo/FlashInfo/…), including **variable-format**
+  records whose element count depends on a sibling tag (Canon AFInfo's
+  `int16s[$val{NumAFPoints}]` AF-point arrays, via a running `varSize`). Still
+  to do: Canon ColorData (version-keyed offsets), Nikon AFInfo/LensData, and
+  Sony's Tag9xxx records (where Sony keeps nearly everything). A number of
+  sub-record tags are extracted but not yet fully PrintConv-formatted (the same
+  long tail of per-vendor ValueConv/PrintConv formulas as the main IFDs).
 * **Writing** metadata (this is read-only).
 * Non-TIFF metadata blocks: XMP, IPTC, ICC profile, Photoshop IRB, and most
   audio/video container internals.
