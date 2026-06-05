@@ -10,6 +10,15 @@ pub fn sony(_name: &str, _v: &Value) -> Option<String> {
     None
 }
 
+/// A numeric value's elements as i64 (empty for non-numeric values).
+fn ints(v: &Value) -> Vec<i64> {
+    match v {
+        Value::U(a) => a.iter().map(|&x| x as i64).collect(),
+        Value::I(a) => a.clone(),
+        _ => Vec::new(),
+    }
+}
+
 pub fn olympus(name: &str, v: &Value) -> Option<String> {
     match name {
         // SpecialMode: "shootmode, Sequence: N, Panorama: dir" from 3 ints.
@@ -68,6 +77,33 @@ pub fn olympus(name: &str, v: &Value) -> Option<String> {
             } else {
                 Some(format!("{} m", format_g(a as f64 / 1000.0, 10)))
             }
+        }
+        // 3-number setting records: "value (min X, max Y)" (the E-1's CS-relative
+        // variant is not modelled here).
+        "CustomSaturation" | "ContrastSetting" | "SharpnessSetting" => {
+            let n = ints(v);
+            (n.len() == 3).then(|| format!("{} (min {}, max {})", n[0], n[1], n[2]))
+        }
+        // Underwater-housing manometer: pressure raw/10 kPa; reading is two
+        // values /10 rendered "X m, Y ft".
+        "ManometerPressure" => Some(format!("{} kPa", format_g(v.as_f64()? / 10.0, 10))),
+        "ManometerReading" => {
+            let n = ints(v);
+            (n.len() == 2).then(|| {
+                format!("{} m, {} ft", format_g(n[0] as f64 / 10.0, 10), format_g(n[1] as f64 / 10.0, 10))
+            })
+        }
+        // ColorMatrix is stored int16u but ExifTool reads (and shows) it int16s.
+        "ColorMatrix" => match v {
+            Value::U(a) => Some(
+                a.iter().map(|&x| (x as u16 as i16).to_string()).collect::<Vec<_>>().join(" "),
+            ),
+            _ => None,
+        },
+        // WhiteBalanceTemperature: 0 -> "Auto".
+        "WhiteBalanceTemperature" => {
+            let t = v.as_i64()?;
+            Some(if t == 0 { "Auto".into() } else { t.to_string() })
         }
         _ => None,
     }
