@@ -19,6 +19,7 @@ pub mod exif;
 pub mod file_meta;
 pub mod filetype;
 pub mod formats;
+pub mod makernotes;
 pub mod reader;
 pub mod tag;
 pub mod value;

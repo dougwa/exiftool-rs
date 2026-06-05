@@ -35,28 +35,43 @@ maker-note modules can be layered on.
   the `Unknown (N)` fallback.
 * **Container parsers**: JPEG segment walker (EXIF/APP1, JFIF/APP0, comments,
   SOFn frame info), PNG chunks (IHDR, eXIf, tEXt), TIFF (whole-file IFD).
+* **Maker notes** (EXIF tag 0x927c) for **Canon** and **Nikon**:
+  * A `ProcessBinaryData` engine for the indexed binary records (Canon
+    CameraSettings / ShotInfo / FocalLength), with tag tables generated from
+    `Canon.pm`.
+  * Canon's `Image::ExifTool::Canon::Main` IFD, including ported formula
+    converters (APEX aperture via `CanonEv`, signed `printParameter`, self-timer,
+    focus distance, camera ISO).
+  * Nikon **Type 3** maker notes (the embedded `Nikon\0` sub-TIFF), with the
+    `Nikon::Main` IFD table and the table-wide `FormatString` PrintConv
+    (title-casing) plus string-keyed enumerations.
 * **Filesystem pseudo-tags** (the `File`/`System` group): name, directory, size
   (`ConvertFileSize`), modify/access/inode-change timestamps in local time,
   permissions, file type, MIME type.
 
 ## Parity
 
-Measured against the reference `exiftool` (v13.59) across the 44 JPEG/PNG/TIFF
-images in ExifTool's own test suite, comparing every shared tag's printed value:
+Measured against the reference `exiftool` across the JPEG images in ExifTool's
+own test suite, comparing every shared tag's printed value:
 
 ```
-2058 exact tag-value matches vs 41 mismatches  →  98.0%
+all test JPEGs   2139 exact tag-value matches vs  77 mismatches  →  96.5%
+Canon.jpg         105 / 114 maker-note + EXIF tags
+Nikon.jpg          64 /  66
 ```
 
-The remaining differences are almost entirely things this foundation
-deliberately doesn't implement yet (see below): values that ExifTool sources
-from **maker-note modules** or **Composite tags** and prioritises over the base
-EXIF value.
+With Canon and Nikon maker-note support, exiftool-rs now extracts ~150 more
+correct tags across the suite than the EXIF-only foundation did. The remaining
+differences are things still not implemented (see below): the long tail of
+vendor binary sub-records, the full lens/model databases, and ExifTool's
+cross-group **Composite/priority** system.
 
 ## Not implemented (by design, for now)
 
-* **Maker-note modules** (Canon, Nikon, Sony, Olympus, …) — the biggest chunk of
-  ExifTool, each a large per-vendor module.
+* **Other maker-note modules** (Sony, Olympus, Panasonic, …). Canon and Nikon
+  are implemented; the remaining vendors are each a large per-vendor module.
+  Within Canon/Nikon, the long tail of binary sub-records (AFInfo, LensData,
+  ColorBalance, the full LensType/ModelID lens databases) is not yet ported.
 * **Composite tags** and ExifTool's cross-group **priority/duplicate** system
   (e.g. the Composite `GPSAltitude` that merges altitude + reference, or
   SubSec-augmented dates).
@@ -75,12 +90,18 @@ src/
     png.rs          PNG chunk parser
     tiff.rs         TIFF entry point
   exif/           the shared TIFF/EXIF IFD engine
-    mod.rs          IFD walking + sub-IFD recursion
+    mod.rs          IFD walking + sub-IFD recursion + maker-note dispatch
     format.rs       EXIF value format types (@formatSize/@formatName)
     tags.rs         tag-table lookup + MakeDescription
     table_exif.rs   generated from Exif.pm
     table_gps.rs    generated from GPS.pm
     printconv.rs    value -> human conversions
+  makernotes/     Canon and Nikon maker-note parsing
+    binary.rs       ProcessBinaryData engine (+ Pc enums)
+    canon.rs        Canon::Main IFD + ported formula converters
+    canon/*.rs      generated binary tables (CameraSettings, ShotInfo, ...)
+    nikon.rs        Nikon Type 3 sub-TIFF + FormatString PrintConv
+    nikon/*.rs      generated Nikon::Main IFD table
   file_meta.rs    filesystem "File" pseudo-tags
   datetime.rs     local-time formatting (libc localtime_r, no deps)
   value.rs        Value enum + ExifTool-compatible number formatting

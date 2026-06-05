@@ -5,7 +5,7 @@
 //! This module walks IFDs starting from a TIFF header, recurses into the EXIF,
 //! GPS and Interop sub-IFDs, and produces fully-converted `ExtractedTag`s.
 
-mod format;
+pub mod format;
 pub mod printconv;
 pub mod table_exif;
 pub mod table_gps;
@@ -36,8 +36,10 @@ pub fn parse_tiff(data: &[u8]) -> Result<Vec<ExtractedTag>> {
 
     let mut out = Vec::new();
     let mut seen = Vec::new();
+    // Camera Make, captured from IFD0 and used to dispatch maker notes.
+    let mut make: Option<String> = None;
     // IFD0 (and its chain to IFD1 = thumbnail).
-    walk_chain(&r, ifd0, Table::Exif, "IFD0", &mut out, &mut seen);
+    walk_chain(&r, ifd0, Table::Exif, "IFD0", &mut out, &mut seen, &mut make);
     Ok(out)
 }
 
@@ -49,6 +51,7 @@ fn walk_chain(
     group1: &str,
     out: &mut Vec<ExtractedTag>,
     seen: &mut Vec<usize>,
+    make: &mut Option<String>,
 ) {
     let mut idx = 0usize;
     while off != 0 {
@@ -63,7 +66,7 @@ fn walk_chain(
         } else {
             group1.to_string()
         };
-        let next = parse_ifd(r, off, table, &name, out, seen);
+        let next = parse_ifd(r, off, table, &name, out, seen, make);
         off = next;
         idx += 1;
         if table != Table::Exif {
@@ -80,6 +83,7 @@ fn parse_ifd(
     group1: &str,
     out: &mut Vec<ExtractedTag>,
     seen: &mut Vec<usize>,
+    make: &mut Option<String>,
 ) -> usize {
     let count = match r.u16(off) {
         Some(c) => c as usize,
@@ -90,6 +94,8 @@ fn parse_ifd(
     // First pass: collect raw (TagDef, Value) and remember sub-IFD pointers.
     let mut raw: Vec<(&'static tags::TagDef, Value)> = Vec::new();
     let mut subdirs: Vec<(Table, &'static str, usize)> = Vec::new();
+    // Maker-note (tag 0x927c) location, dispatched after this IFD's own tags.
+    let mut maker_note: Option<(usize, usize)> = None;
 
     for i in 0..count {
         let e = entries_start + i * 12;
@@ -111,6 +117,12 @@ fn parse_ifd(
                 None => continue,
             }
         };
+
+        // MakerNote (0x927c): a vendor-specific blob, dispatched after this IFD.
+        if table == Table::Exif && tag == 0x927c {
+            maker_note = Some((voff, total));
+            continue;
+        }
 
         let def = table.lookup(tag);
 
@@ -150,15 +162,27 @@ fn parse_ifd(
 
     // Second pass: build prints (with sibling access for GPS coordinates).
     for (d, value) in &raw {
+        // Capture the camera Make (IFD0) so maker notes can be dispatched later.
+        if d.name == "Make" {
+            if let Some(s) = value.as_str() {
+                *make = Some(s.trim().to_string());
+            }
+        }
         let print = compute_print(table, d.name, value, &raw);
         out.push(ExtractedTag::new("EXIF", group1, d.name, value.clone(), print));
+    }
+
+    // Dispatch maker notes (after the ExifIFD's own tags, matching ExifTool order).
+    if let Some((mo, ml)) = maker_note {
+        let mk = make.as_deref().unwrap_or("");
+        crate::makernotes::parse(mk, r, mo, ml, out);
     }
 
     // Recurse into sub-IFDs (after this IFD's own tags, matching extraction order).
     for (tbl, g1, ptr) in subdirs {
         if !seen.contains(&ptr) {
             seen.push(ptr);
-            parse_ifd(r, ptr, tbl, g1, out, seen);
+            parse_ifd(r, ptr, tbl, g1, out, seen, make);
         }
     }
 

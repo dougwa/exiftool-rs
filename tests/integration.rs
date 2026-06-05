@@ -79,3 +79,29 @@ fn rational_precision_matches_roundfloat() {
     // ExifTool rounds rationals to 10 significant figures (RoundFloat).
     assert_tag(&m, "BrightnessValue", "0.26015625");
 }
+
+#[test]
+fn canon_maker_notes() {
+    let m = tags("Canon.jpg");
+    // ProcessBinaryData (CameraSettings) tags.
+    assert_tag(&m, "MacroMode", "Unknown (0)");
+    assert_tag(&m, "Quality", "RAW");
+    assert_tag(&m, "ContinuousDrive", "Continuous");
+    assert_tag(&m, "CanonExposureMode", "Manual");
+    // Canon APEX aperture conversion (CanonEv).
+    assert_tag(&m, "MaxAperture", "4");
+    assert_tag(&m, "MinAperture", "27");
+    // Signed printParameter and SelfTimer formula.
+    assert_tag(&m, "Contrast", "+1");
+    assert_tag(&m, "SelfTimer", "Off");
+}
+
+#[test]
+fn nikon_maker_notes() {
+    let m = tags("Nikon.jpg");
+    // Nikon Type 3 (embedded TIFF) with the FormatString default PrintConv.
+    assert_tag(&m, "Quality", "Fine");
+    assert_tag(&m, "WhiteBalance", "Auto");
+    assert_tag(&m, "ColorMode", "Color");
+    assert_tag(&m, "MakerNoteVersion", "1.00");
+}
