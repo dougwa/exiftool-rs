@@ -3,6 +3,7 @@
 //! table's PrintConv / shared EXIF PrintConv / raw rendering. Ported by hand
 //! from the matching converters in the ExifTool vendor modules.
 
+use crate::exif::printconv;
 use crate::value::{format_g, Value};
 
 pub fn sony(_name: &str, _v: &Value) -> Option<String> {
@@ -95,6 +96,24 @@ pub fn minolta(_name: &str, _v: &Value) -> Option<String> {
     None
 }
 
+/// ExifTool's `Image::ExifTool::Pentax::PentaxEv` — decode Pentax's APEX-style
+/// 1/8-EV integer encoding. The odd 1/3-EV codes (low octal digit 3 or 5) are
+/// nudged to true thirds; note Perl's `8/3`/`16/3` are float, so the result is
+/// fractional even though the input is an integer.
+fn pentax_ev(val: i64) -> f64 {
+    let mut x = val as f64;
+    if val & 0x01 != 0 {
+        let sign = if val < 0 { -1.0 } else { 1.0 };
+        let frac = (val.unsigned_abs() & 0x07) as f64; // ($val * $sign) & 0x07
+        if frac == 3.0 {
+            x += sign * (8.0 / 3.0 - frac);
+        } else if frac == 5.0 {
+            x += sign * (16.0 / 3.0 - frac);
+        }
+    }
+    x / 8.0
+}
+
 pub fn pentax(name: &str, v: &Value) -> Option<String> {
     match name {
         // "3 0 0 0" -> "3.0.0.0" (tr/ /./).
@@ -102,6 +121,49 @@ pub fn pentax(name: &str, v: &Value) -> Option<String> {
         // "640 480" -> "640x480" (tr/ /x/).
         "PreviewImageSize" => Some(v.to_string().replace(' ', "x")),
         "CameraTemperature" => Some(format!("{} C", v)),
+
+        // --- AEInfo / CameraSettings exposure-value conversions (Pentax.pm). ---
+        // Each tag stores a raw integer that ExifTool turns into a real exposure
+        // quantity via an APEX-style ValueConv, then formats with PrintConv. We
+        // produce the final print string directly (the stored value stays raw).
+        //
+        // Shutter speeds: `exp(-PentaxEv(...)*log2)` / `24*exp(-(v-32)*log2/8)`
+        // are `2^x`; printed with the shared PrintExposureTime ("1/203").
+        "TvExposureTimeSetting" => {
+            let raw = v.as_i64()?;
+            Some(printconv::print_exposure_time(2f64.powf(-pentax_ev(raw - 68))))
+        }
+        "AEExposureTime" | "AEMinExposureTime" => {
+            let raw = v.as_f64()?;
+            Some(printconv::print_exposure_time(24.0 * 2f64.powf(-(raw - 32.0) / 8.0)))
+        }
+        // Apertures: `2^((v-68)/16)` (or PentaxEv variant), printed "%.1f" — but
+        // AEMinAperture rounds to "%.0f".
+        "AvApertureSetting" => Some(format!("{:.1}", 2f64.powf(pentax_ev(v.as_i64()? - 68) / 2.0))),
+        "AEAperture" | "AEMaxAperture" | "AEMaxAperture2" => {
+            Some(format!("{:.1}", 2f64.powf((v.as_f64()? - 68.0) / 16.0)))
+        }
+        "AEMinAperture" => Some(format!("{:.0}", 2f64.powf((v.as_f64()? - 68.0) / 16.0))),
+        // ISO: `int(100*2^...+0.5)` (already integral) or `int($val+0.5)`.
+        "SvISOSetting" | "ISOFloor" => {
+            let raw = v.as_i64()?;
+            Some(format!("{}", (100.0 * 2f64.powf(pentax_ev(raw - 32)) + 0.5).floor() as i64))
+        }
+        "AE_ISO" => {
+            let raw = v.as_f64()?;
+            Some(format!("{}", (100.0 * 2f64.powf((raw - 32.0) / 8.0) + 0.5).floor() as i64))
+        }
+        // Exposure compensation: `PentaxEv(64-v)`, printed "%+.1f" (0 -> "0").
+        "BaseExposureCompensation" => {
+            let ev = pentax_ev(64 - v.as_i64()?);
+            Some(if ev != 0.0 { format!("{ev:+.1}") } else { "0".into() })
+        }
+        // Plain ValueConv, no PrintConv (numeric value shown as-is).
+        "AEXv" => Some(format_g((v.as_f64()? - 64.0) / 8.0, 10)),
+        "AEBXv" => Some(format_g(v.as_f64()? / 8.0, 10)),
+        "SensitivityAdjust" => Some(format_g((v.as_f64()? - 50.0) / 10.0, 10)),
+        "EffectiveLV" => Some(format!("{:.1}", v.as_f64()? / 1024.0)),
+
         _ => None,
     }
 }
