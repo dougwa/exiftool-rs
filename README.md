@@ -35,16 +35,32 @@ maker-note modules can be layered on.
   the `Unknown (N)` fallback.
 * **Container parsers**: JPEG segment walker (EXIF/APP1, JFIF/APP0, comments,
   SOFn frame info), PNG chunks (IHDR, eXIf, tEXt), TIFF (whole-file IFD).
-* **Maker notes** (EXIF tag 0x927c) for **Canon** and **Nikon**:
+* **Maker notes** (EXIF tag 0x927c) for **Canon**, **Nikon**, and a further
+  **eleven vendors** (Olympus, Panasonic, FujiFilm, Minolta, Casio, Sanyo,
+  Sigma, Ricoh, Pentax, and partial Sony):
   * A `ProcessBinaryData` engine for the indexed binary records (Canon
     CameraSettings / ShotInfo / FocalLength), with tag tables generated from
     `Canon.pm`.
   * Canon's `Image::ExifTool::Canon::Main` IFD, including ported formula
     converters (APEX aperture via `CanonEv`, signed `printParameter`, self-timer,
-    focus distance, camera ISO).
+    focus distance, camera ISO, ShotInfo BaseISO/MeasuredEV/BulbDuration), the
+    full `%canonModelID` lens-body lookup, and `RawConv => undef` n/a
+    suppression.
   * Nikon **Type 3** maker notes (the embedded `Nikon\0` sub-TIFF), with the
     `Nikon::Main` IFD table and the table-wide `FormatString` PrintConv
     (title-casing) plus string-keyed enumerations.
+  * A **generic vendor IFD dispatcher** (`makernotes/vendor.rs`) that recognises
+    each vendor by its maker-note signature ("OLYMP\0", "Panasonic\0",
+    "FUJIFILM", "SIGMA\0", "SANYO\0", "AOC\0", …) and resolves ExifTool's two
+    layout knobs: the IFD **start** offset and whether out-of-line value offsets
+    are **TIFF-base** or **maker-note-base** relative (ExifTool's
+    `Base => '$start - N'`). Per-vendor formula converters port the common
+    ValueConv/PrintConv (Olympus `SpecialMode`, Sigma `Label:` strip, Casio
+    `ObjectDistance`, Panasonic/Pentax version strings, …).
+  * All vendor IFD and binary tables are generated directly from the ExifTool
+    Perl modules by **introspecting the loaded `%Main` hashes** (rather than
+    regex-scraping the source), capturing enumerations, formats, the `Binary`
+    flag, and `RawConv` suppression rules.
 * **Filesystem pseudo-tags** (the `File`/`System` group): name, directory, size
   (`ConvertFileSize`), modify/access/inode-change timestamps in local time,
   permissions, file type, MIME type.
@@ -55,23 +71,28 @@ Measured against the reference `exiftool` across the JPEG images in ExifTool's
 own test suite, comparing every shared tag's printed value:
 
 ```
-all test JPEGs   2139 exact tag-value matches vs  77 mismatches  →  96.5%
-Canon.jpg         105 / 114 maker-note + EXIF tags
-Nikon.jpg          64 /  66
+all test JPEGs   2304 exact tag-value matches vs  96 mismatches
+Canon.jpg         113 / 162 shared tags (only the cross-group MeteringMode left)
+Nikon.jpg          65 /  80
 ```
 
-With Canon and Nikon maker-note support, exiftool-rs now extracts ~150 more
-correct tags across the suite than the EXIF-only foundation did. The remaining
-differences are things still not implemented (see below): the long tail of
-vendor binary sub-records, the full lens/model databases, and ExifTool's
-cross-group **Composite/priority** system.
+With maker-note support for thirteen vendors, exiftool-rs now extracts several
+hundred more correct tags across the suite than the EXIF-only foundation did
+(e.g. Sanyo 83, Pentax 89, Panasonic 77, FujiFilm 69 shared-tag matches, all
+from a standing start of zero). The remaining differences are things still not
+implemented (see below): the long tail of vendor binary **sub-records**, the
+full lens databases, and ExifTool's cross-group **Composite/priority** system
+(which accounts for the handful of remaining same-named mismatches such as
+maker-note vs EXIF `MeteringMode`).
 
 ## Not implemented (by design, for now)
 
-* **Other maker-note modules** (Sony, Olympus, Panasonic, …). Canon and Nikon
-  are implemented; the remaining vendors are each a large per-vendor module.
-  Within Canon/Nikon, the long tail of binary sub-records (AFInfo, LensData,
-  ColorBalance, the full LensType/ModelID lens databases) is not yet ported.
+* **Vendor binary sub-records** (`SubDirectory` ProcessBinaryData blocks such as
+  Canon AFInfo/ColorData, Nikon AFInfo/LensData, and Sony's Tag9xxx records).
+  The main IFD of each of the thirteen supported vendors is parsed; the nested
+  binary sub-records — which is where Sony in particular keeps nearly everything
+  — are skipped for now. Variable-format records (whose element count depends on
+  a sibling tag, e.g. Canon AFInfo) also need a richer binary engine.
 * **Composite tags** and ExifTool's cross-group **priority/duplicate** system
   (e.g. the Composite `GPSAltitude` that merges altitude + reference, or
   SubSec-augmented dates).

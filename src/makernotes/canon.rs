@@ -6,14 +6,16 @@
 
 mod canon_camera_settings;
 mod canon_focal_length;
+mod canon_model_id;
 mod canon_shot_info;
 
-use super::binary::Pc;
+use super::binary::{Pc, Skip};
 use super::{MnKind, MnTag};
 use crate::value::{format_g, Value};
 
 use canon_camera_settings::CANON_CAMERA_SETTINGS;
 use canon_focal_length::CANON_FOCAL_LENGTH;
+use canon_model_id::CANON_MODEL_ID;
 use canon_shot_info::CANON_SHOT_INFO;
 
 /// Canon serial-number format (0x15) enumeration.
@@ -107,6 +109,19 @@ pub fn special(name: &str, v: &Value) -> Option<String> {
         }
         // Measured EV (ShotInfo variant): val/8 - 6.
         "MeasuredEV2" => Some(format_g(f? / 8.0 - 6.0, 10)),
+        // ShotInfo BaseISO: exp(val/32 * ln2) * 100/32, rounded to a whole number.
+        "BaseISO" => Some(format!("{:.0}", (f? / 32.0 * std::f64::consts::LN_2).exp() * 100.0 / 32.0)),
+        // ShotInfo MeasuredEV: val/32 + 5, two decimals.
+        "MeasuredEV" => Some(format!("{:.2}", f? / 32.0 + 5.0)),
+        // ShotInfo BulbDuration: tenths of a second.
+        "BulbDuration" => Some(format_g(f? / 10.0, 10)),
+        // FocalLength FocalPlaneX/YSize: 1/1000-inch units -> mm, 2 decimals.
+        "FocalPlaneXSize" | "FocalPlaneYSize" => Some(format!("{:.2} mm", f? * 25.4 / 1000.0)),
+        // ShotInfo OpticalZoomCode: 8 means "not applicable".
+        "OpticalZoomCode" => {
+            let val = v.as_i64()?;
+            Some(if val == 8 { "n/a".to_string() } else { val.to_string() })
+        }
         // Auto ISO: exp(val/32 * ln2) * 100, rounded to a whole number.
         "AutoISO" => Some(format!("{:.0}", (f? / 32.0 * std::f64::consts::LN_2).exp() * 100.0)),
         // Focal lengths: assume FocalUnits == 1 (the common case) and append mm.
@@ -131,14 +146,14 @@ pub static CANON_MAIN: &[MnTag] = &[
     MnTag { id: 0x2, kind: MnKind::Binary(&CANON_FOCAL_LENGTH) },
     MnTag { id: 0x4, kind: MnKind::Binary(&CANON_SHOT_INFO) },
     // Scalar tags (read with the IFD entry's own format).
-    MnTag { id: 0x6, kind: MnKind::Scalar { name: "CanonImageType", pc: Pc::None } },
-    MnTag { id: 0x7, kind: MnKind::Scalar { name: "CanonFirmwareVersion", pc: Pc::None } },
-    MnTag { id: 0x8, kind: MnKind::Scalar { name: "FileNumber", pc: Pc::None } },
-    MnTag { id: 0x9, kind: MnKind::Scalar { name: "OwnerName", pc: Pc::None } },
-    MnTag { id: 0xe, kind: MnKind::Scalar { name: "CanonFileLength", pc: Pc::None } },
-    MnTag { id: 0x10, kind: MnKind::Scalar { name: "CanonModelID", pc: Pc::None } },
-    MnTag { id: 0x15, kind: MnKind::Scalar { name: "SerialNumberFormat", pc: Pc::Enum(SERIAL_FORMAT) } },
-    MnTag { id: 0x1e, kind: MnKind::Scalar { name: "FirmwareRevision", pc: Pc::None } },
-    MnTag { id: 0x28, kind: MnKind::Scalar { name: "ImageUniqueID", pc: Pc::None } },
-    MnTag { id: 0x38, kind: MnKind::Scalar { name: "BatteryType", pc: Pc::None } },
+    MnTag { id: 0x6, kind: MnKind::Scalar { name: "CanonImageType", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 0x7, kind: MnKind::Scalar { name: "CanonFirmwareVersion", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 0x8, kind: MnKind::Scalar { name: "FileNumber", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 0x9, kind: MnKind::Scalar { name: "OwnerName", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 0xe, kind: MnKind::Scalar { name: "CanonFileLength", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 0x10, kind: MnKind::Scalar { name: "CanonModelID", pc: Pc::Enum(CANON_MODEL_ID), bin: false, skip: Skip::Never } },
+    MnTag { id: 0x15, kind: MnKind::Scalar { name: "SerialNumberFormat", pc: Pc::Enum(SERIAL_FORMAT), bin: false, skip: Skip::Never } },
+    MnTag { id: 0x1e, kind: MnKind::Scalar { name: "FirmwareRevision", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 0x28, kind: MnKind::Scalar { name: "ImageUniqueID", pc: Pc::None, bin: false, skip: Skip::Never } },
+    MnTag { id: 0x38, kind: MnKind::Scalar { name: "BatteryType", pc: Pc::None, bin: false, skip: Skip::Never } },
 ];

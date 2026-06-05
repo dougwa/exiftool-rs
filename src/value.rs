@@ -156,13 +156,34 @@ impl fmt::Display for Value {
             Value::F(v) => write!(f, "{}", join(v.iter().map(|x| fmt_float(*x)))),
             Value::R(v) => write!(f, "{}", join(v.iter().map(|(n, d)| fmt_rational(*n, *d)))),
             Value::Text(s) => write!(f, "{}", s.trim_end_matches('\0').trim_end()),
-            Value::Bytes(b) => {
-                write!(f, "(Binary data {} bytes, use -b option to extract)", b.len())
-            }
+            Value::Bytes(b) => match printable_ascii(b) {
+                // ExifTool renders short, fully-printable `undef` values as their
+                // ASCII text (e.g. version strings "0100"/"MLT0"); only genuinely
+                // binary or long values get the placeholder.
+                Some(s) => write!(f, "{s}"),
+                None => write!(f, "(Binary data {} bytes, use -b option to extract)", b.len()),
+            },
         }
     }
 }
 
 fn join(it: impl Iterator<Item = String>) -> String {
     it.collect::<Vec<_>>().join(" ")
+}
+
+/// If `b` (trailing NULs stripped) is non-empty, no longer than ExifTool's
+/// 128-byte binary threshold, and contains only printable ASCII (plus common
+/// whitespace), return it as a string. This mirrors ExifTool printing short
+/// printable `undef` values verbatim while marking real binary as such.
+fn printable_ascii(b: &[u8]) -> Option<String> {
+    let end = b.iter().rposition(|&c| c != 0).map(|i| i + 1).unwrap_or(0);
+    let s = &b[..end];
+    if s.is_empty() || s.len() > 128 {
+        return None;
+    }
+    if s.iter().all(|&c| (0x20..=0x7e).contains(&c) || matches!(c, b'\t' | b'\n' | b'\r')) {
+        Some(String::from_utf8_lossy(s).trim_end().to_string())
+    } else {
+        None
+    }
 }

@@ -38,7 +38,13 @@ impl Fmt {
 pub enum Pc {
     None,
     Enum(&'static [(i64, &'static str)]),
-    /// String-keyed enumeration (e.g. Nikon's "AUTO" -> "Auto").
+    /// Like [`Pc::Enum`] but the source PrintConv had an `OTHER => sub{…}`
+    /// fallback: unlisted values return `None` (so the vendor `special`
+    /// converter can take over) instead of "Unknown (N)".
+    EnumO(&'static [(i64, &'static str)]),
+    /// String-keyed enumeration (e.g. Nikon's "AUTO" -> "Auto"). Also matches a
+    /// numeric value against its integer-string key (Canon/Sony/Minolta lens
+    /// tables use mixed integer and "N.M" variant keys).
     EnumStr(&'static [(&'static str, &'static str)]),
 }
 
@@ -54,13 +60,43 @@ impl Pc {
                     None => Some(format!("Unknown ({k})")),
                 }
             }
-            Pc::EnumStr(table) => {
-                let k = v.as_str()?.trim();
-                table
-                    .iter()
-                    .find(|(kk, _)| *kk == k)
-                    .map(|(_, s)| s.to_string())
+            Pc::EnumO(table) => {
+                let k = v.as_i64()?;
+                // Unlisted -> None (the OTHER fallback is handled by `special`).
+                table.iter().find(|(kk, _)| *kk == k).map(|(_, s)| s.to_string())
             }
+            Pc::EnumStr(table) => {
+                let lookup = |k: &str| table.iter().find(|(kk, _)| *kk == k).map(|(_, s)| s.to_string());
+                match v.as_str() {
+                    Some(s) => lookup(s.trim()),
+                    // Numeric value: match its integer-string key (lens tables).
+                    None => lookup(&v.as_i64()?.to_string()),
+                }
+            }
+        }
+    }
+}
+
+/// An ExifTool `RawConv => '... undef ...'` n/a-suppression rule: a tag whose
+/// raw value matches is dropped entirely (not just printed as "Unknown"). Only
+/// the handful of patterns that actually occur are modelled.
+#[derive(Clone, Copy)]
+pub enum Skip {
+    /// Never suppress.
+    Never,
+    /// Suppress when the value equals this sentinel (e.g. -1 or 0 = "n/a").
+    Eq(i64),
+    /// Suppress when the value is <= this bound (e.g. out-of-range exposures).
+    Le(i64),
+}
+
+impl Skip {
+    /// Whether `v` should be suppressed under this rule.
+    pub fn suppresses(&self, v: &Value) -> bool {
+        match self {
+            Skip::Never => false,
+            Skip::Eq(n) => v.as_i64() == Some(*n),
+            Skip::Le(n) => v.as_i64().map(|x| x <= *n).unwrap_or(false),
         }
     }
 }
@@ -70,6 +106,7 @@ pub struct BinTag {
     pub name: &'static str,
     pub fmt: Option<Fmt>,
     pub pc: Pc,
+    pub skip: Skip,
 }
 
 pub struct BinTable {
@@ -124,6 +161,9 @@ pub fn process(
             Some(v) => v,
             None => continue, // past end of record
         };
+        if t.skip.suppresses(&value) {
+            continue; // ExifTool RawConv => undef (n/a sentinel)
+        }
         let print = t
             .pc
             .apply(&value)

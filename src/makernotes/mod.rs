@@ -13,11 +13,12 @@
 pub mod binary;
 pub mod canon;
 pub mod nikon;
+pub mod vendor;
 
 use crate::exif::format;
 use crate::reader::Reader;
 use crate::tag::ExtractedTag;
-use binary::{BinTable, Pc, Special};
+use binary::{BinTable, Pc, Skip, Special};
 
 /// One entry in a maker-note IFD table.
 pub struct MnTag {
@@ -26,8 +27,11 @@ pub struct MnTag {
 }
 
 pub enum MnKind {
-    /// A directly-stored value (read with the IFD entry's own format).
-    Scalar { name: &'static str, pc: Pc },
+    /// A directly-stored value (read with the IFD entry's own format). `bin`
+    /// marks tags ExifTool flags `Binary => 1` (data dumps, embedded images):
+    /// these always print as the "(Binary data N bytes…)" placeholder rather
+    /// than their decoded numbers.
+    Scalar { name: &'static str, pc: Pc, bin: bool, skip: Skip },
     /// A pointer to a ProcessBinaryData record.
     Binary(&'static BinTable),
 }
@@ -39,17 +43,40 @@ pub fn parse(make: &str, r: &Reader, mn_off: usize, mn_len: usize, out: &mut Vec
         walk_ifd(r, mn_off, canon::CANON_MAIN, "Canon", canon::special, out);
     } else if make.to_ascii_uppercase().starts_with("NIKON") {
         nikon::parse(r, mn_off, mn_len, out);
+    } else {
+        // Sony, Olympus, Panasonic, FujiFilm, Sanyo, Sigma, Ricoh, Casio,
+        // Minolta — recognised by signature/Make. Unknown vendors fall through.
+        vendor::parse(make, r, mn_off, mn_len, out);
     }
-    // Other vendors fall through (left unparsed, as before).
 }
 
 /// Walk a maker-note IFD using `table`, emitting MakerNotes-group tags. Scalar
 /// tags are read with the host reader; Binary tags hand their raw value bytes to
 /// the ProcessBinaryData engine. Used directly for Canon and for Nikon's
-/// embedded sub-TIFF (with an appropriate reader/offset).
+/// embedded sub-TIFF (with an appropriate reader/offset). Out-of-line value
+/// offsets are interpreted relative to the host TIFF base (offset 0 of `r`).
 pub fn walk_ifd(
     r: &Reader,
     off: usize,
+    table: &[MnTag],
+    group1: &str,
+    special: Special,
+    out: &mut Vec<ExtractedTag>,
+) {
+    walk_ifd_based(r, off, 0, table, group1, special, out);
+}
+
+/// Like [`walk_ifd`], but out-of-line value offsets are interpreted relative to
+/// `base` (the host position that maker-note offset 0 maps to). Vendors whose
+/// dispatch declares `Base => '$start - N'` (Olympus2/3, FujiFilm, Pentax5/6,
+/// some Ricoh) store offsets relative to the maker-note start rather than the
+/// TIFF base; for those, `base` is the maker-note offset. Host-base vendors
+/// (Canon, Sony, Sanyo, Sigma, Panasonic, …) pass `base = 0`.
+#[allow(clippy::too_many_arguments)]
+pub fn walk_ifd_based(
+    r: &Reader,
+    off: usize,
+    base: usize,
     table: &[MnTag],
     group1: &str,
     special: Special,
@@ -75,7 +102,7 @@ pub fn walk_ifd(
             e + 8
         } else {
             match r.u32(e + 8) {
-                Some(p) => p as usize,
+                Some(p) => base + p as usize,
                 None => continue,
             }
         };
@@ -91,15 +118,21 @@ pub fn walk_ifd(
                     binary::process(raw, r.order, bin, group1, special, out);
                 }
             }
-            MnKind::Scalar { name, pc } => {
+            MnKind::Scalar { name, pc, bin, skip } => {
                 if let Some(value) = format::read_value(r, fmt, cnt, voff) {
-                    // Prefer the table's PrintConv, then the vendor special
-                    // converter, then the shared EXIF PrintConv, then raw.
-                    let print = pc
-                        .apply(&value)
-                        .or_else(|| special(name, &value))
-                        .or_else(|| crate::exif::printconv::apply(name, &value))
-                        .unwrap_or_else(|| value.to_string());
+                    if skip.suppresses(&value) {
+                        continue; // ExifTool RawConv => undef (n/a sentinel)
+                    }
+                    let print = if *bin {
+                        format!("(Binary data {total} bytes, use -b option to extract)")
+                    } else {
+                        // Prefer the table's PrintConv, then the vendor special
+                        // converter, then the shared EXIF PrintConv, then raw.
+                        pc.apply(&value)
+                            .or_else(|| special(name, &value))
+                            .or_else(|| crate::exif::printconv::apply(name, &value))
+                            .unwrap_or_else(|| value.to_string())
+                    };
                     out.push(ExtractedTag::new("MakerNotes", group1, *name, value, print));
                 }
             }
