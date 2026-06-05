@@ -55,6 +55,20 @@ pub fn olympus(name: &str, v: &Value) -> Option<String> {
             Some(if s.contains('.') { s } else { format!("{s}.0") })
         }
         "FocalPlaneDiagonal" => Some(format!("{} mm", v)),
+        // FocusDistance is a rational whose denominator is mm/cm depending on
+        // model; ExifTool ignores the denominator (uses the numerator a) and
+        // returns a/1000 metres (0xffffffff or 0 -> "inf").
+        "FocusDistance" => {
+            let a = match v {
+                Value::R(r) => r.first().map(|&(n, _)| n)?,
+                _ => v.as_i64()?,
+            };
+            if a as u64 == 0xffff_ffff || a == 0 {
+                Some("inf".into())
+            } else {
+                Some(format!("{} m", format_g(a as f64 / 1000.0, 10)))
+            }
+        }
         _ => None,
     }
 }
@@ -92,8 +106,15 @@ pub fn sigma(_name: &str, v: &Value) -> Option<String> {
     None
 }
 
-pub fn minolta(_name: &str, _v: &Value) -> Option<String> {
-    None
+pub fn minolta(name: &str, v: &Value) -> Option<String> {
+    match name {
+        // FocusDistance: millimetres -> "N m" (0 -> "inf").
+        "FocusDistance" => {
+            let d = v.as_f64()? / 1000.0;
+            Some(if d == 0.0 { "inf".into() } else { format!("{} m", format_g(d, 10)) })
+        }
+        _ => None,
+    }
 }
 
 /// ExifTool's `Image::ExifTool::Pentax::PentaxEv` — decode Pentax's APEX-style

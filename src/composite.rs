@@ -36,6 +36,16 @@ fn fv(args: &[Option<Src>], i: usize) -> Option<f64> {
     args.get(i).and_then(|o| o.as_ref()).and_then(Src::f)
 }
 
+/// `FocusDistance` as the ValueConv distance in metres. The Olympus/Minolta
+/// maker-note FocusDistance stores a raw rational/integer and carries the
+/// converted metres only in its print ("385.8 m"), so parse the leading number
+/// of the print — as we do for BulbDuration — rather than trusting the raw
+/// value. "inf" or any non-numeric print yields None.
+fn fd_meters(args: &[Option<Src>], i: usize) -> Option<f64> {
+    let s = args.get(i).and_then(|o| o.as_ref())?;
+    s.print.split_whitespace().next().and_then(|t| t.parse::<f64>().ok())
+}
+
 /// A composite definition: ordered source names (with a required flag) and the
 /// builder that turns the resolved sources into a (raw value, print) pair.
 struct Def {
@@ -353,7 +363,7 @@ static DEFS: &[Def] = &[
             let focal = fv(args, 0).filter(|&x| x != 0.0)?;
             let sf = fv(args, 1).filter(|&x| x != 0.0)?;
             let mut corr = 1.0;
-            let fd = fv(args, 2);
+            let fd = fd_meters(args, 2);
             if let Some(d) = fd {
                 let dd = 1000.0 * d - focal;
                 if dd > 0.0 {
@@ -405,7 +415,7 @@ static DEFS: &[Def] = &[
             let coc = fv(args, 2)?;
             // Subject distance: FocusDistance (0 -> infinity), else the
             // alternates, else the average of the lower/upper bounds.
-            let d = match fv(args, 3) {
+            let d = match fd_meters(args, 3) {
                 Some(d) => {
                     if d == 0.0 {
                         1e10
