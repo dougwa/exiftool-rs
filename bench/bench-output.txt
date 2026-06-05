@@ -1,0 +1,8 @@
+Files: 688   Total size: 1226.4 MB   (exiftool 13.55, exiftool-rs 0.1.0)
+
+| Mode                            | Files | exiftool ms | exiftool-rs ms | speedup | ET file/s | RS file/s | ET MB/s | RS MB/s |
+|---------------------------------|-------|-------------|----------------|---------|-----------|-----------|---------|---------|
+| Batch (all files, 1 invocation) | 688   | 4262        | 214            | 19.9x   | 161       | 3217      | 288     | 5734    |
+| Per-file (1 invocation/file)    | 60    | 11342       | 465            | 24.4x   | 5         | 129       | 8       | 186     |
+
+(times are best-of-N wall clock; output discarded; speedup = exiftool / exiftool-rs)
