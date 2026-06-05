@@ -101,23 +101,71 @@ fn description(name: &str) -> String {
     .to_string()
 }
 
+/// Maker-note tags that ExifTool trusts *over* the same-named EXIF tag (its
+/// effective table/tag `Priority` is 1, not the 0 it assigns to the unreliable
+/// EXIF-duplicate maker tags). Keyed by (family-1 group, tag name). Only entries
+/// whose maker-note conversion we already render correctly are listed, so the
+/// override never replaces a good EXIF value with a not-yet-converted maker one.
+const TRUSTED_MAKER_OVERRIDES: &[(&str, &str)] = &[
+    ("Olympus", "MeteringMode"), // EXIF "Multi-segment" -> Olympus "ESP"
+    ("Nikon", "LightSource"),    // EXIF "Unknown" -> Nikon "Speedlight"/"Colored"
+    ("Nikon", "WhiteBalance"),   // EXIF "Manual" -> Nikon "Preset0"
+];
+
+/// ExifTool's tag priority, reduced to the two levels our data exercises.
+///
+/// ExifTool keeps the highest-priority tag for a name; on a tie the *later*
+/// extraction wins, so since EXIF is parsed before maker notes a priority-1
+/// maker tag overrides the EXIF one. Most EXIF-duplicate maker tags carry
+/// `Priority => 0` (ExifTool deems them unreliable) and so never displace EXIF;
+/// we model that by giving maker-note tags priority 0 *unless* they are a
+/// trusted override. Thumbnail `IFD1` / `PreviewIFD` tags are also priority 0,
+/// so a main-image tag always wins over its thumbnail copy.
+fn priority(t: &ExtractedTag) -> i32 {
+    if t.group0 == "MakerNotes" {
+        let trusted = TRUSTED_MAKER_OVERRIDES
+            .iter()
+            .any(|(g, n)| *g == t.group1 && n.eq_ignore_ascii_case(&t.name));
+        return if trusted { 1 } else { 0 };
+    }
+    match t.group1.as_str() {
+        "IFD1" | "PreviewIFD" => 0,
+        _ => 1,
+    }
+}
+
 /// Apply duplicate-suppression and tag filters to the extracted list.
 fn select<'a>(tags: &'a [ExtractedTag], o: &Options) -> Vec<&'a ExtractedTag> {
-    let mut seen: Vec<&str> = Vec::new();
-    let mut out = Vec::new();
-    for t in tags {
-        if !o.filters.is_empty()
-            && !o.filters.iter().any(|f| f.eq_ignore_ascii_case(&t.name))
-        {
-            continue;
-        }
-        if !o.allow_dup && seen.iter().any(|n| n.eq_ignore_ascii_case(&t.name)) {
-            continue;
-        }
-        seen.push(&t.name);
-        out.push(t);
+    let passes = |t: &ExtractedTag| {
+        o.filters.is_empty() || o.filters.iter().any(|f| f.eq_ignore_ascii_case(&t.name))
+    };
+    if o.allow_dup {
+        // -a: keep every (filtered) tag, in extraction order.
+        return tags.iter().filter(|t| passes(t)).collect();
     }
-    out
+    // Resolve duplicates by ExifTool's rule, which (with priorities of 0/1 and
+    // EXIF parsed before maker notes) reduces to: keep the last priority-1
+    // occurrence of a name, or the first occurrence if none is priority 1.
+    let mut winners: Vec<(String, usize)> = Vec::new(); // (lowercase name, winning index)
+    for (i, t) in tags.iter().enumerate() {
+        if !passes(t) {
+            continue;
+        }
+        let key = t.name.to_ascii_lowercase();
+        match winners.iter_mut().find(|(n, _)| *n == key) {
+            // A later tag only displaces an earlier one if it is priority 1.
+            Some(w) => {
+                if priority(t) == 1 {
+                    w.1 = i;
+                }
+            }
+            None => winners.push((key, i)),
+        }
+    }
+    // Emit the surviving tags in their original extraction order.
+    let mut keep: Vec<usize> = winners.iter().map(|w| w.1).collect();
+    keep.sort_unstable();
+    keep.into_iter().map(|i| &tags[i]).collect()
 }
 
 fn value_string(t: &ExtractedTag, o: &Options) -> String {
