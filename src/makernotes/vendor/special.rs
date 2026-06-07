@@ -299,6 +299,18 @@ pub fn pentax(name: &str, v: &Value) -> Option<String> {
         "PreviewImageSize" => Some(v.to_string().replace(' ', "x")),
         "CameraTemperature" => Some(format!("{} C", v)),
 
+        // SR (shake-reduction) / AF sub-record ValueConvs.
+        "AFIntegrationTime" => Some(format!("{} ms", v.as_i64()? * 2)),
+        "SRHalfPressTime" => {
+            let t = v.as_f64()? / 60.0;
+            Some(format!("{t:.2} s{}", if t > 254.5 / 60.0 { " or longer" } else { "" }))
+        }
+        "SRFocalLength" => {
+            let raw = v.as_i64()?;
+            let f = if raw & 0x01 != 0 { raw * 4 } else { raw / 2 };
+            Some(format!("{f} mm"))
+        }
+
         // Multi-value enum-list PrintConvs: map each value through its component
         // hash and join (ExifTool joins these list PrintConvs with "; ").
         "FlashMode" => {
