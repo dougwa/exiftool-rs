@@ -80,38 +80,69 @@ Measured against the reference `exiftool` across the JPEG images in ExifTool's
 own test suite, comparing every shared tag's printed value:
 
 ```
-all test JPEGs   2672 exact tag-value matches
-Canon.jpg         133 / 162 shared tags (AFInfo AF-point arrays + composites)
-Olympus2.jpg      116 / 145 (Equipment / CameraSettings / FocusInfo sub-IFDs)
-Pentax.jpg        128 / 205 (CameraSettings / AEInfo / LensInfo / … records)
+all test JPEGs   2766 exact tag-value matches / 79 mismatches
+Pentax.jpg        165 / 205 shared tags (CameraSettings / AEInfo / SR / … records)
+Olympus2.jpg      127 / 145 (Equipment / CameraSettings / FocusInfo sub-IFDs)
+Canon.jpg         133 / 162 (AFInfo AF-point arrays + composites)
+NikonD70.jpg      111 / 155 (Lens / ShotInfo / AFInfo)
 ```
 
-With maker-note support for thirteen vendors plus composite tags, exiftool-rs
-now extracts several hundred more correct tags across the suite than the
-EXIF-only foundation did (e.g. Sanyo 93, Pentax 99, Panasonic 87, FujiFilm 77
-shared-tag matches). The remaining differences are things still not implemented
-(see below): vendor binary **sub-records** (which is where the `FocusDistance`
-that would complete `FOV`/`DOF` lives), the full lens databases, and ExifTool's
-cross-group **priority/duplicate** system (the maker-note vs EXIF `MeteringMode`
-case).
+With maker-note support for thirteen vendors, composite tags, hand-ported
+per-tag PrintConv/ValueConv converters, and ExifTool's tag **priority/duplicate**
+resolution, the bulk of the EXIF + common maker-note surface now matches the
+reference exactly. The remaining differences are catalogued under
+[Known gaps](#known-gaps) below.
 
-## Not implemented (by design, for now)
+## Known gaps
 
-* **Some vendor binary sub-records.** The maker-note `SubDirectory` mechanism is
-  implemented — both nested IFDs (`MnKind::SubIfd`, e.g. Olympus
-  Equipment/CameraSettings/FocusInfo/ImageProcessing) and ProcessBinaryData
-  blocks (Canon AFInfo, Minolta CameraSettings, Pentax
-  CameraSettings/AEInfo/LensInfo/FlashInfo/…), including **variable-format**
-  records whose element count depends on a sibling tag (Canon AFInfo's
-  `int16s[$val{NumAFPoints}]` AF-point arrays, via a running `varSize`). Still
-  to do: Canon ColorData (version-keyed offsets), Nikon AFInfo/LensData, and
-  Sony's Tag9xxx records (where Sony keeps nearly everything). A number of
-  sub-record tags are extracted but not yet fully PrintConv-formatted (the same
-  long tail of per-vendor ValueConv/PrintConv formulas as the main IFDs).
+The reading core is faithful, but parity is not complete. The remaining
+suite-wide differences (~79 mismatched tag values, plus tags not yet extracted)
+fall into the categories below, roughly highest-leverage first. Most are bounded
+per-tag conversions; a few need new mechanisms.
+
+**Per-tag PrintConv/ValueConv still to port** (the long tail; each goes in a
+vendor `special()` converter):
+
+* **Olympus** multi-value enum/bitfield tags in the CameraSettings/FocusInfo
+  sub-IFDs (FocusMode, FocusProcess, AFAreas, Gradation, DriveMode, PanoramaMode,
+  AFPoint, ExternalFlash). Blocked on the fact that the same tag name appears in
+  several Olympus tables with different maps, which the name-keyed `special()`
+  can't yet disambiguate.
+* **Canon** ShotInfo/ColorData fields (TargetExposureTime, CameraTemperature,
+  FlashOutput, FlashModel, LensType lens-database lookup, FocusDistanceUpper/
+  Lower) — several need Canon's version-gated ColorData (`Condition` evaluation)
+  which is not yet implemented.
+* **Nikon** `CFAPattern` (shared EXIF `undef` decode) and `ExposureTuning`.
+* Firmware / serial / time string formats (Ricoh `FirmwareVersion`, Panasonic
+  `InternalSerialNumber` / `TimeSincePowerOn`).
+* GPS altitude rounding, and sub-second / time-zone `DateTimeOriginal` (a
+  composite of `SubSecTime` + `OffsetTime`).
+
+**Mechanisms not yet built:**
+
+* **Cross-group priority — partial.** ExifTool's duplicate resolution (keep the
+  highest-priority tag per name) is implemented, but maker-note tags that should
+  override EXIF are gated behind a small hand-verified allowlist
+  (`TRUSTED_MAKER_OVERRIDES`); the general case wants per-tag/table `Priority`
+  emitted into the generated tables.
+* **BITMASK / `Mask` PrintConvs.** Currently flattened by the code generator to a
+  partial enum and hand-patched to `Pc::None` + handled in `special()`; the
+  generator should emit these directly.
+* **Encrypted maker records:** Nikon ShotInfo/LensData (XOR-encrypted; this is
+  where the `FocusDistance` that would complete Nikon `FOV`/`DOF` lives) and
+  Pentax `ShutterCount` (obfuscated with Date/Time).
+* **Canon ColorData** version-keyed offsets and the full lens databases.
+* **Other metadata blocks:** XMP, IPTC, ICC profile, Photoshop IRB, FLIR thermal,
+  and most audio/video container internals (the bulk of the not-yet-extracted
+  tags).
 * **Writing** metadata (this is read-only).
-* Non-TIFF metadata blocks: XMP, IPTC, ICC profile, Photoshop IRB, and most
-  audio/video container internals.
-* BigTIFF (64-bit offsets), multi-offset `SubIFDs` lists.
+* BigTIFF (64-bit offsets), multi-offset `SubIFDs` lists, and ExifTool's
+  `FixBase`/`ProcessUnknown` preview-offset correction (a few `PreviewImageStart`
+  values are off by a small constant).
+
+Some test files are intentional edge cases: `ExifTool.jpg` stores its real
+metadata in a proprietary block (so Make/Model/dates read from the wrong place),
+and a couple of vendor `DataDump` blobs are truncated.
 
 ## Architecture
 
