@@ -44,6 +44,20 @@ fn strenum_or(table: &[(&str, &str)], k: &str) -> String {
     table.iter().find(|(kk, _)| *kk == k).map(|(_, s)| s.to_string()).unwrap_or_else(|| format!("Unknown ({k})"))
 }
 
+/// ExifTool's hash-with-`BITMASK` PrintConv: a direct-key lookup first, else one
+/// label per set bit (joined ", "), else "Unknown (N)".
+fn bitmask_or(direct: &[(i64, &str)], bits: &[(u32, &str)], val: i64) -> String {
+    if let Some((_, s)) = direct.iter().find(|(k, _)| *k == val) {
+        return s.to_string();
+    }
+    let parts: Vec<&str> = bits.iter().filter(|(b, _)| val & (1 << b) != 0).map(|(_, s)| *s).collect();
+    if parts.is_empty() {
+        format!("Unknown ({val})")
+    } else {
+        parts.join(", ")
+    }
+}
+
 pub fn olympus(name: &str, v: &Value) -> Option<String> {
     match name {
         // SpecialMode: "shootmode, Sequence: N, Panorama: dir" from 3 ints.
@@ -290,6 +304,19 @@ static PENTAX_PICTUREMODE_0: &[(&str, &str)] = &[
     ("254 0", "Movie (Av, Auto Aperture)"), ("255 0", "Movie (P, Auto Aperture)"), ("255 4", "Video (4)"),
 ];
 static PENTAX_PICTUREMODE_1: &[(i64, &str)] = &[(0, "1/2 EV steps"), (1, "1/3 EV steps")];
+// FlashOptions / FlashOptions2 (Mask 0xf0 -> value >> 4).
+#[rustfmt::skip]
+static PENTAX_FLASHOPTIONS: &[(i64, &str)] = &[
+    (0, "Normal"), (1, "Red-eye reduction"), (2, "Auto"), (3, "Auto, Red-eye reduction"),
+    (5, "Wireless (Master)"), (6, "Wireless (Control)"), (8, "Slow-sync"),
+    (9, "Slow-sync, Red-eye reduction"), (10, "Trailing-curtain Sync"),
+];
+// AFPointSelected2 BITMASK (bit -> AF point).
+#[rustfmt::skip]
+static PENTAX_AFPOINTSEL2_BITS: &[(u32, &str)] = &[
+    (0, "Upper-left"), (1, "Top"), (2, "Upper-right"), (3, "Left"), (4, "Mid-left"), (5, "Center"),
+    (6, "Mid-right"), (7, "Right"), (8, "Lower-left"), (9, "Bottom"), (10, "Lower-right"),
+];
 
 pub fn pentax(name: &str, v: &Value) -> Option<String> {
     match name {
@@ -309,6 +336,21 @@ pub fn pentax(name: &str, v: &Value) -> Option<String> {
             let raw = v.as_i64()?;
             let f = if raw & 0x01 != 0 { raw * 4 } else { raw / 2 };
             Some(format!("{f} mm"))
+        }
+
+        // BITMASK / masked-enum PrintConvs the codegen flattens to a partial
+        // enum (so they printed "Unknown (N)").
+        "SRResult" => {
+            Some(bitmask_or(&[(0, "Not stabilized")], &[(0, "Stabilized"), (6, "Not ready")], v.as_i64()?))
+        }
+        "AFPointSelected2" => Some(bitmask_or(&[(0, "Auto")], PENTAX_AFPOINTSEL2_BITS, v.as_i64()?)),
+        // Mask => 0xf0 (use the high nibble): value & 0xf0 >> 4 before lookup.
+        "AFPointMode" => {
+            let m = (v.as_i64()? & 0xf0) >> 4;
+            Some(bitmask_or(&[(0, "Auto")], &[(0, "Select"), (1, "Fixed Center")], m))
+        }
+        "FlashOptions" | "FlashOptions2" => {
+            Some(enum_or(PENTAX_FLASHOPTIONS, (v.as_i64()? & 0xf0) >> 4, false))
         }
 
         // Multi-value enum-list PrintConvs: map each value through its component
