@@ -283,7 +283,7 @@ fn rational_str(n: i64, d: i64) -> String {
 
 /// ExifTool's PrintLensInfo: 4 values -> "min-maxmm f/min-max" (collapsing equal
 /// endpoints), e.g. "18-55mm f/3.5-5.6" or "3.99mm f/1.8".
-fn print_lens_info(parts: &[(i64, i64)]) -> Option<String> {
+pub fn print_lens_info(parts: &[(i64, i64)]) -> Option<String> {
     if parts.len() != 4 {
         return None;
     }
