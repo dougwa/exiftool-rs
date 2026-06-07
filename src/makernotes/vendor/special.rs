@@ -352,6 +352,29 @@ pub fn pentax(name: &str, v: &Value) -> Option<String> {
         "FlashOptions" | "FlashOptions2" => {
             Some(enum_or(PENTAX_FLASHOPTIONS, (v.as_i64()? & 0xf0) >> 4, false))
         }
+        // Metering segments: int8u (stored undef) -> LV via v/8-6 (255 = n/a).
+        "AEMeteringSegments" | "FlashMeteringSegments" | "SlaveFlashMeteringSegments" => {
+            let b = bytes(v)?;
+            Some(
+                b.iter()
+                    .map(|&x| match x {
+                        255 => "n/a".to_string(),
+                        0 => "0".to_string(),
+                        _ => format!("{:.1}", x as f64 / 8.0 - 6.0),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )
+        }
+        // Battery A/D -> "raw (V, %)" (K10D/K20D calibration).
+        "BodyBatteryADNoLoad" => {
+            let val = v.as_f64()?;
+            Some(format!("{} ({:.1}V, {}%)", val as i64, val * 8.18 / 186.0, ((val - 155.0) * 100.0 / 35.0) as i64))
+        }
+        "BodyBatteryADLoad" => {
+            let val = v.as_f64()?;
+            Some(format!("{} ({:.1}V, {}%)", val as i64, val * 8.18 / 186.0, ((val - 152.0) * 100.0 / 34.0) as i64))
+        }
 
         // Multi-value enum-list PrintConvs: map each value through its component
         // hash and join (ExifTool joins these list PrintConvs with "; ").
