@@ -132,6 +132,25 @@ fn maker_notes_preserved_across_rewrite() {
     }
 }
 
+/// Re-editing a file we already wrote must stay stable: our serializer output
+/// must round-trip back through our parser, preserving maker notes each time.
+#[test]
+fn re_editing_own_output_is_stable() {
+    let Some(p) = temp_copy("Nikon.jpg", "reedit") else { return };
+    let maker_before = read_group(&p, "MakerNotes");
+    write_to_path(&p, &[set("Artist", "First")], OVERWRITE).expect("write 1");
+    write_to_path(&p, &[set("Copyright", "2026 Me"), set("ISO", "800")], OVERWRITE).expect("write 2");
+    write_to_path(&p, &[Edit { name: "Artist".into(), op: EditOp::Delete }], OVERWRITE).expect("write 3");
+
+    let m = read_map(&p);
+    assert!(!m.contains_key("Artist"));
+    assert_eq!(m.get("Copyright").map(String::as_str), Some("2026 Me"));
+    assert_eq!(m.get("ISO").map(String::as_str), Some("800"));
+    if !maker_before.is_empty() {
+        assert_eq!(maker_before, read_group(&p, "MakerNotes"), "maker notes drifted across re-edits");
+    }
+}
+
 /// The IFD1 thumbnail image must survive a rewrite intact.
 #[test]
 fn thumbnail_preserved_across_rewrite() {
