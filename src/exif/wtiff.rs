@@ -120,6 +120,16 @@ pub fn maker_fix(make: &str, blob: &[u8]) -> MakerFix {
     if sig(b"AOC\0") {
         return shift(6); // Pentax/Asahi
     }
+    if sig(b"JVC ") {
+        return shift(4);
+    }
+    if sig(b"GE\0\0") {
+        // "GE\0\0…" wraps an embedded big-endian TIFF whose value offsets are not
+        // purely embedded-relative; we leave the blob untouched (safe — no
+        // corruption) rather than risk a wrong shift. A couple of GE offsets then
+        // read as "suspicious" but the data is intact. (Documented limitation.)
+        return MakerFix::None;
+    }
 
     // --- Signature-less vendors (a bare IFD at offset 0) ----------------------
     let mu = make.to_ascii_uppercase();

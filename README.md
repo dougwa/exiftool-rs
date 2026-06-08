@@ -89,7 +89,7 @@ maker-note modules can be layered on.
   f-number, exposure time, orientation names). Set with `-TAG=VALUE`, delete with
   `-TAG=`; the original is preserved as `FILE_original` unless
   `-overwrite_original` is given. Verified against the reference tool: for an
-  identical edit across the test-suite JPEGs, **35 of 41** produce output that
+  identical edit across the test-suite JPEGs, **36 of 41** produce output that
   validates exactly as `exiftool`'s own write does (the rest need ExifTool's deep
   per-vendor maker-note *rewriting* — see below).
 
@@ -132,8 +132,9 @@ case).
   maker notes are not yet supported — maker notes are preserved as opaque blobs.
   The remaining handful of files that don't match ExifTool's write byte-for-clean
   need its full per-vendor maker-note rewriting: Canon's footer / OriginalDecision
-  data (1D-series), the Canon/MIE/AFCP **trailer** offset fixups, a few
-  unrecognised vendors (GE, JVC), and Olympus2's already-broken preview pointer.
+  data (1D-series), the Canon/MIE/AFCP **trailer** offset fixups, GE's embedded
+  big-endian maker note (left untouched, safe), and Olympus2's already-broken
+  preview pointer.
 * Non-TIFF metadata blocks: XMP, IPTC, ICC profile, Photoshop IRB, and most
   audio/video container internals.
 * BigTIFF (64-bit offsets), multi-offset `SubIFDs` lists.
