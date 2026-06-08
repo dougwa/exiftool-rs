@@ -10,6 +10,8 @@ pub enum Error {
     /// The file format could not be recognised / parsed.
     Format(String),
     Unsupported(String),
+    /// A write operation failed (bad value, unwritable tag, size limit, …).
+    Write(String),
 }
 
 impl fmt::Display for Error {
@@ -19,6 +21,7 @@ impl fmt::Display for Error {
             Error::Truncated(what) => write!(f, "truncated data: {what}"),
             Error::Format(m) => write!(f, "format error: {m}"),
             Error::Unsupported(m) => write!(f, "unsupported: {m}"),
+            Error::Write(m) => write!(f, "{m}"),
         }
     }
 }

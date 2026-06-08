@@ -1,10 +1,11 @@
 # exiftool-rs
 
 A Rust reimplementation of the **core** of [ExifTool](https://exiftool.org/) —
-Phil Harvey's Perl tool for reading media-file metadata. This is a from-scratch
-reverse-engineering of ExifTool's reading path, not a binding or a port of the
-Perl. It reads the standard metadata that lives in the vast majority of camera
-and phone files and prints it in ExifTool's format.
+Phil Harvey's Perl tool for reading and writing media-file metadata. This is a
+from-scratch reverse-engineering of ExifTool's read/write paths, not a binding
+or a port of the Perl. It reads the standard metadata that lives in the vast
+majority of camera and phone files, prints it in ExifTool's format, and can
+write common EXIF tags back into JPEG files.
 
 ExifTool is ~327k lines of Perl across 193 format modules. No single project can
 reproduce all of it at once. This crate faithfully implements the **shared
@@ -17,7 +18,8 @@ maker-note modules can be layered on.
 * **CLI** compatible with common ExifTool invocations:
   `exiftool-rs FILE`, `-json`/`-j`, `-G`/`-G1` (groups), `-s` (short names),
   `-n` (numeric/no PrintConv), `-a` (allow duplicates), `-TagName` filters,
-  `-ver`.
+  `-ver`; and for writing, `-TAG=VALUE` (set), `-TAG=` (delete), and
+  `-overwrite_original`.
 * **File-type detection** from magic numbers + extension (ported from ExifTool's
   `%magicNumber` / `%fileTypeLookup`): JPEG, TIFF (+ TIFF-based RAW: CR2, NEF,
   DNG, ARW, ORF, RW2, …), PNG, GIF, BMP, HEIC/AVIF/MP4/MOV, WebP, PDF, PSD.
@@ -73,6 +75,23 @@ maker-note modules can be layered on.
   rational-denominator sensor-diagonal algorithm and the general
   focal-plane-resolution path), `CircleOfConfusion`, `FocalLength35efl`, `FOV`,
   `HyperfocalDistance`, `DOF`, and `LightValue`.
+* **Writing EXIF tags to JPEG** (`exif/wtiff.rs`, `wserialize.rs`, `writable.rs`,
+  `writeconv.rs`). Because the read path is lossy (PrintConv strings, dropped
+  unknown tags, flattened maker notes), writing uses its own **faithful,
+  byte-round-trippable IFD model**: the EXIF block is parsed keeping every entry,
+  edited, and re-serialized, then spliced back into the JPEG (an APP1 is created
+  if the file had no EXIF). Maker notes, the IFD1 thumbnail, and unknown tags are
+  carried through untouched — the relocated maker-note blob has its internal
+  offsets **fixed up per vendor** (reusing the same signature/base classification
+  the reader uses), so files validate cleanly. A curated writable-tag table
+  covers the common IFD0/ExifIFD/GPS tags with **inverse value conversions**
+  (dates, GPS decimal degrees → DMS rationals with an auto-set N/S/E/W reference,
+  f-number, exposure time, orientation names). Set with `-TAG=VALUE`, delete with
+  `-TAG=`; the original is preserved as `FILE_original` unless
+  `-overwrite_original` is given. Verified against the reference tool: for an
+  identical edit across the test-suite JPEGs, **34 of 41** produce output that
+  validates exactly as `exiftool`'s own write does (the rest need ExifTool's deep
+  per-vendor maker-note *rewriting* — see below).
 
 ## Parity
 
@@ -108,7 +127,14 @@ case).
   Sony's Tag9xxx records (where Sony keeps nearly everything). A number of
   sub-record tags are extracted but not yet fully PrintConv-formatted (the same
   long tail of per-vendor ValueConv/PrintConv formulas as the main IFDs).
-* **Writing** metadata (this is read-only).
+* **Writing beyond EXIF-in-JPEG.** Writing standalone TIFF/RAW and other
+  containers, writing non-EXIF blocks (XMP/IPTC/…), and editing tags *inside*
+  maker notes are not yet supported — maker notes are preserved as opaque blobs.
+  The remaining handful of files that don't match ExifTool's write byte-for-clean
+  need its full per-vendor maker-note rewriting: Canon's footer / OriginalDecision
+  data (1D-series), the Canon/MIE/AFCP **trailer** offset fixups, deep nested
+  sub-IFD offset shifting (OlympusE1 CameraSettings), and a few unrecognised
+  vendors (GE, JVC).
 * Non-TIFF metadata blocks: XMP, IPTC, ICC profile, Photoshop IRB, and most
   audio/video container internals.
 * BigTIFF (64-bit offsets), multi-offset `SubIFDs` lists.

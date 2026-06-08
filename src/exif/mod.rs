@@ -10,12 +10,17 @@ pub mod printconv;
 pub mod table_exif;
 pub mod table_gps;
 pub mod tags;
+pub mod writable;
+pub mod writeconv;
+pub mod wserialize;
+pub mod wtiff;
 
 use crate::error::{Error, Result};
 use crate::reader::{ByteOrder, Reader};
 use crate::tag::ExtractedTag;
 use crate::value::Value;
 use tags::{SubDir, Table};
+use wtiff::{WEntry, WIfd, WTiff, WVal};
 
 /// Parse a TIFF structure (EXIF). `data` is the buffer whose offset 0 is the
 /// start of the TIFF header (`II\x2a\0` or `MM\0\x2a`). All IFD offsets are
@@ -246,4 +251,87 @@ fn compute_print(
     }
 
     printconv::apply(name, value).unwrap_or_else(|| value.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Writing
+// ---------------------------------------------------------------------------
+
+/// One requested change to a file's metadata.
+pub struct Edit {
+    /// Tag name (matched case-insensitively against the writable table).
+    pub name: String,
+    pub op: EditOp,
+}
+
+pub enum EditOp {
+    /// Set the tag to this (human) value.
+    Set(String),
+    /// Remove the tag.
+    Delete,
+}
+
+/// Parse a TIFF block, apply `edits`, and re-serialize it. `data` starts at the
+/// `II`/`MM` header (the same view `parse_tiff` takes).
+pub fn write_tiff(data: &[u8], edits: &[Edit]) -> Result<Vec<u8>> {
+    let mut tiff = wtiff::parse(data)?;
+    for edit in edits {
+        apply_edit(&mut tiff, edit)?;
+    }
+    Ok(wserialize::serialize(&tiff))
+}
+
+fn apply_edit(tiff: &mut WTiff, edit: &Edit) -> Result<()> {
+    let w = writable::lookup(&edit.name)
+        .ok_or_else(|| Error::Write(format!("tag not writable: {}", edit.name)))?;
+    let order = tiff.order;
+    let ifd = target_ifd_mut(&mut tiff.ifd0, w.ifd);
+    match &edit.op {
+        EditOp::Delete => {
+            ifd.entries.retain(|e| e.tag != w.id);
+        }
+        EditOp::Set(input) => {
+            let enc = writeconv::encode(w, input, order)?;
+            set_entry(ifd, w.id, enc.fmt, enc.bytes);
+            for ex in enc.extra {
+                set_entry(ifd, ex.id, ex.fmt, ex.bytes);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Replace the entry with id `tag` in `ifd`, or append it if absent.
+fn set_entry(ifd: &mut WIfd, tag: u16, fmt: u16, bytes: Vec<u8>) {
+    let entry = WEntry { tag, format: fmt, val: WVal::Data(bytes) };
+    match ifd.entries.iter_mut().find(|e| e.tag == tag) {
+        Some(slot) => *slot = entry,
+        None => ifd.entries.push(entry),
+    }
+}
+
+/// Get a mutable reference to the IFD a writable tag belongs in, creating the
+/// ExifIFD / GPS sub-IFD (and its pointer entry in IFD0) if it does not exist.
+fn target_ifd_mut(ifd0: &mut WIfd, loc: writable::Loc) -> &mut WIfd {
+    let sub_tag = match loc {
+        writable::Loc::Ifd0 => return ifd0,
+        writable::Loc::Exif => 0x8769u16, // ExifOffset
+        writable::Loc::Gps => 0x8825u16,  // GPSInfo
+    };
+    if let Some(i) = ifd0
+        .entries
+        .iter()
+        .position(|e| e.tag == sub_tag && matches!(e.val, WVal::Sub(_)))
+    {
+        if let WVal::Sub(s) = &mut ifd0.entries[i].val {
+            return s;
+        }
+        unreachable!("matched Sub above");
+    }
+    ifd0.entries.push(WEntry { tag: sub_tag, format: 4, val: WVal::Sub(WIfd::default()) });
+    let last = ifd0.entries.len() - 1;
+    match &mut ifd0.entries[last].val {
+        WVal::Sub(s) => s,
+        _ => unreachable!("just pushed Sub"),
+    }
 }

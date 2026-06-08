@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 use crate::exif::tags::make_description;
 use crate::tag::ExtractedTag;
+use crate::{Edit, EditOp};
 
 #[derive(Default)]
 pub struct Options {
@@ -29,6 +30,8 @@ pub struct Options {
 
 pub fn parse_args(args: &[String]) -> std::result::Result<Action, String> {
     let mut o = Options::default();
+    let mut edits: Vec<Edit> = Vec::new();
+    let mut overwrite_original = false;
     for a in args {
         if a == "-ver" {
             return Ok(Action::Version);
@@ -46,12 +49,23 @@ pub fn parse_args(args: &[String]) -> std::result::Result<Action, String> {
             o.numeric = true;
         } else if a == "-a" {
             o.allow_dup = true;
+        } else if a == "-overwrite_original" {
+            overwrite_original = true;
         } else if let Some(tag) = a.strip_prefix('-') {
-            // Treat any other -Word as a tag filter (e.g. -FNumber).
-            if !tag.is_empty() && tag.chars().next().unwrap().is_ascii_alphabetic() {
-                o.filters.push(tag.to_string());
-            } else {
+            if tag.is_empty() || !tag.chars().next().unwrap().is_ascii_alphabetic() {
                 return Err(format!("unknown option: {a}"));
+            }
+            // `-TAG=VALUE` sets a tag; `-TAG=` deletes it; bare `-TAG` is a read filter.
+            match tag.split_once('=') {
+                Some((name, value)) => edits.push(Edit {
+                    name: name.to_string(),
+                    op: if value.is_empty() {
+                        EditOp::Delete
+                    } else {
+                        EditOp::Set(value.to_string())
+                    },
+                }),
+                None => o.filters.push(tag.to_string()),
             }
         } else {
             o.files.push(PathBuf::from(a));
@@ -60,31 +74,39 @@ pub fn parse_args(args: &[String]) -> std::result::Result<Action, String> {
     if o.files.is_empty() {
         return Err("no input files".to_string());
     }
+    if !edits.is_empty() {
+        return Ok(Action::Write { files: o.files, edits, overwrite_original });
+    }
     Ok(Action::Run(o))
 }
 
 pub enum Action {
     Run(Options),
+    Write { files: Vec<PathBuf>, edits: Vec<Edit>, overwrite_original: bool },
     Version,
     Help,
 }
 
 pub const HELP: &str = "\
-exiftool-rs — read media metadata (a Rust subset of ExifTool)
+exiftool-rs — read and write media metadata (a Rust subset of ExifTool)
 
 USAGE:
-    exiftool-rs [OPTIONS] FILE...
+    exiftool-rs [OPTIONS] FILE...           read metadata
+    exiftool-rs -TAG=VALUE [...] FILE...    write metadata (JPEG)
 
 OPTIONS:
-    -ver           print version number and exit
-    -j, -json      output in JSON format
-    -G, -G0        show family-0 group name for each tag
-    -G1            show family-1 group name for each tag
-    -s             short output: tag name instead of description
-    -n             numeric: disable human-readable conversions
-    -a             allow duplicate tag names
-    -TAG           extract only the named tag (e.g. -FNumber), repeatable
-    -h, --help     show this help
+    -ver                 print version number and exit
+    -j, -json            output in JSON format
+    -G, -G0              show family-0 group name for each tag
+    -G1                  show family-1 group name for each tag
+    -s                   short output: tag name instead of description
+    -n                   numeric: disable human-readable conversions
+    -a                   allow duplicate tag names
+    -TAG                 extract only the named tag (e.g. -FNumber), repeatable
+    -TAG=VALUE           set a tag (e.g. -Artist=\"Jane Doe\")
+    -TAG=                delete a tag
+    -overwrite_original  edit in place without writing a _original backup
+    -h, --help           show this help
 ";
 
 /// Description overrides that don't follow the name-spacing algorithm.
@@ -214,4 +236,25 @@ fn json_str(s: &str) -> String {
 /// (ExifTool prints `======== FILE`).
 pub fn print_file_header(path: &Path) {
     println!("======== {}", path.display());
+}
+
+/// Apply `edits` to each file, printing ExifTool-style status lines. Returns
+/// true if any file failed.
+pub fn run_write(files: &[PathBuf], edits: &[Edit], overwrite_original: bool) -> bool {
+    let opts = crate::WriteOptions { overwrite_original };
+    let mut updated = 0u32;
+    let mut had_error = false;
+    for path in files {
+        match crate::write_to_path(path, edits, opts) {
+            Ok(()) => updated += 1,
+            Err(e) => {
+                had_error = true;
+                eprintln!("Error: {} - {}", path.display(), e);
+            }
+        }
+    }
+    if updated > 0 {
+        println!("    {updated} image files updated");
+    }
+    had_error
 }
