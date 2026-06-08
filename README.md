@@ -127,14 +127,25 @@ case).
   Sony's Tag9xxx records (where Sony keeps nearly everything). A number of
   sub-record tags are extracted but not yet fully PrintConv-formatted (the same
   long tail of per-vendor ValueConv/PrintConv formulas as the main IFDs).
-* **Writing beyond EXIF-in-JPEG.** Writing standalone TIFF/RAW and other
-  containers, writing non-EXIF blocks (XMP/IPTC/…), and editing tags *inside*
-  maker notes are not yet supported — maker notes are preserved as opaque blobs.
-  The remaining handful of files that don't match ExifTool's write byte-for-clean
-  need its full per-vendor maker-note rewriting: Canon's footer / OriginalDecision
-  data (1D-series), the Canon/MIE/AFCP **trailer** offset fixups, GE's embedded
-  big-endian maker note (left untouched, safe), and Olympus2's already-broken
-  preview pointer.
+* **Writing — scope and gaps.** Writing covers **EXIF tags in JPEG** (set and
+  delete); the following are not yet done:
+  * **Containers** — only JPEG. Standalone TIFF/RAW writing (the serializer is
+    container-agnostic; mostly needs container wiring + StripOffsets relocation)
+    and non-EXIF blocks (XMP, IPTC, ICC) are not implemented.
+  * **Writable tags** — a curated set across IFD0/ExifIFD/GPS (`writable.rs`);
+    trivially extensible but not exhaustive.
+  * **Maker-note internals** — maker notes are preserved as opaque blobs
+    (relocated with per-vendor offset fixup); individual maker-note *tags* cannot
+    be edited.
+  * **Per-vendor maker-note rewriting** — ExifTool fully rewrites maker notes; we
+    preserve them. The 5 of 41 suite JPEGs that don't match ExifTool's write are
+    all this: **Canon 1D-series** footer + `OriginalDecisionData` pointer,
+    **AFCP/MIE trailer** offset fixups (`AFCP.jpg`, `ExifTool.jpg`), **GE**'s
+    embedded big-endian TIFF (left untouched — safe, 2 minor warnings), and
+    **Olympus2**'s preview pointer that was already broken in the original. Each
+    is a single/double *minor* `-validate` warning with the data intact.
+  * **Other** — EXIF APP1 is capped at one 64 KB segment; no `+=`/`-=` list
+    operators; inverse PrintConv only for the common tags.
 * Non-TIFF metadata blocks: XMP, IPTC, ICC profile, Photoshop IRB, and most
   audio/video container internals.
 * BigTIFF (64-bit offsets), multi-offset `SubIFDs` lists.
