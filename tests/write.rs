@@ -119,7 +119,8 @@ fn gps_sets_coordinates_and_auto_reference() {
 /// offset schemes (Canon = TIFF-relative, Nikon = embedded TIFF).
 #[test]
 fn maker_notes_preserved_across_rewrite() {
-    for name in ["Canon.jpg", "NikonD70.jpg", "Olympus2.jpg", "Sanyo.jpg"] {
+    // OlympusE1 exercises nested sub-IFD offset shifting (CameraSettings etc.).
+    for name in ["Canon.jpg", "NikonD70.jpg", "Olympus2.jpg", "OlympusE1.jpg", "Sanyo.jpg"] {
         let Some(p) = temp_copy(name, "mn") else { continue };
         let before = read_group(&p, "MakerNotes");
         if before.is_empty() {

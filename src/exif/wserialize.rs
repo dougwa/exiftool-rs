@@ -134,24 +134,109 @@ fn fixup_maker(blob: &MakerBlob, new_off: usize, order: ByteOrder) -> Vec<u8> {
     };
     // The maker note is a plain IFD `ifd_in_blob` bytes into the blob, with
     // out-of-line value offsets absolute within the host TIFF; shift each by
-    // `delta`. (Top-level entries only — the affected vendors store their
-    // sub-records as flat out-of-line arrays, not nested IFDs.)
-    for (pos, off) in offset_patches(&b, ifd_in_blob, order) {
+    // `delta`. Nested sub-IFDs (e.g. Olympus CameraSettings) are followed and
+    // shifted too, but only when the pointed-to region robustly parses as an IFD
+    // (see `looks_like_subifd`), so a flat data blob is never mistaken for one.
+    let mut patches = Vec::new();
+    let mut visited = Vec::new();
+    collect_patches(&b, ifd_in_blob, blob.orig_tiff_off, order, &mut patches, &mut visited, 0);
+    for (pos, off) in patches {
         b[pos..pos + 4].copy_from_slice(&enc_u32(order, (off as i64 + delta) as u32));
     }
     b
 }
 
-/// The (byte position, current value) of every out-of-line value offset in the
-/// plain IFD assumed to start at `ifd_off` of `b`. Empty if that is not a sane IFD.
-fn offset_patches(b: &[u8], ifd_off: usize, order: ByteOrder) -> Vec<(usize, u32)> {
-    let mut out = Vec::new();
+/// Walk the IFD at `ifd_off` of `b`, recording the (byte position, value) of
+/// every TIFF-absolute offset that must be shifted, recursing into nested IFDs.
+/// `orig_off` is the blob's original TIFF offset (to map an absolute offset back
+/// to a blob position).
+fn collect_patches(
+    b: &[u8],
+    ifd_off: usize,
+    orig_off: usize,
+    order: ByteOrder,
+    patches: &mut Vec<(usize, u32)>,
+    visited: &mut Vec<usize>,
+    depth: u8,
+) {
+    if depth > 4 || visited.contains(&ifd_off) {
+        return; // guard against cycles / malformed pointers
+    }
+    visited.push(ifd_off);
     let count = match read_u16(b, ifd_off, order) {
         Some(c) if c >= 1 && ifd_off + 2 + c as usize * 12 + 4 <= b.len() => c as usize,
-        _ => return out,
+        _ => return,
     };
     for i in 0..count {
         let rec = ifd_off + 2 + i * 12;
+        let (fmt, cnt) = match (read_u16(b, rec + 2, order), read_u32(b, rec + 4, order)) {
+            (Some(f), Some(c)) => (f, c as usize),
+            _ => break,
+        };
+        let total = format_size(fmt).unwrap_or(0).saturating_mul(cnt);
+        // An offset-bearing field is either an out-of-line value (total > 4) or
+        // an inline IFD pointer (format 13 = ifd).
+        let is_ifd_ptr = fmt == 13;
+        if total <= 4 && !is_ifd_ptr {
+            continue;
+        }
+        let Some(off) = read_u32(b, rec + 8, order) else { break };
+        let nested = (off as usize).checked_sub(orig_off).filter(|&p| p < b.len());
+        // An inline IFD pointer is only trusted (and shifted) when its target
+        // really parses as an IFD; an out-of-line value is always shifted, and we
+        // additionally recurse when its data parses as a nested IFD.
+        let nested_ok = nested.is_some_and(|p| looks_like_subifd(b, p, orig_off, order));
+        if is_ifd_ptr && !nested_ok {
+            continue;
+        }
+        patches.push((rec + 8, off));
+        if nested_ok {
+            collect_patches(b, nested.unwrap(), orig_off, order, patches, visited, depth + 1);
+        }
+    }
+}
+
+/// Strict test that the region at `pos` is a nested IFD: a plausible entry count
+/// that fits, every entry's format code valid, and every out-of-line offset
+/// landing within the blob's own original TIFF span. The strictness keeps a flat
+/// data array (a thumbnail, a string) from being mistaken for a directory.
+fn looks_like_subifd(b: &[u8], pos: usize, orig_off: usize, order: ByteOrder) -> bool {
+    let count = match read_u16(b, pos, order) {
+        Some(c) if (1..=255).contains(&c) && pos + 2 + c as usize * 12 + 4 <= b.len() => c as usize,
+        _ => return false,
+    };
+    let span = orig_off..=orig_off + b.len();
+    for i in 0..count {
+        let rec = pos + 2 + i * 12;
+        let (fmt, cnt) = match (read_u16(b, rec + 2, order), read_u32(b, rec + 4, order)) {
+            (Some(f), Some(c)) => (f, c as usize),
+            _ => return false,
+        };
+        let esize = match format_size(fmt) {
+            Some(s) => s,
+            None => return false, // an invalid format code means this isn't an IFD
+        };
+        if esize * cnt > 4 {
+            match read_u32(b, rec + 8, order) {
+                Some(off) if span.contains(&(off as usize)) => {}
+                _ => return false,
+            }
+        }
+    }
+    true
+}
+
+/// The (byte position, current value) of every out-of-line value offset in the
+/// plain IFD assumed to start at offset 0 of `b`. Empty if that is not a sane IFD.
+/// Used only by the unknown-vendor detector.
+fn offset_patches(b: &[u8], order: ByteOrder) -> Vec<(usize, u32)> {
+    let mut out = Vec::new();
+    let count = match read_u16(b, 0, order) {
+        Some(c) if c >= 1 && 2 + c as usize * 12 + 4 <= b.len() => c as usize,
+        _ => return out,
+    };
+    for i in 0..count {
+        let rec = 2 + i * 12;
         let (fmt, cnt) = match (read_u16(b, rec + 2, order), read_u32(b, rec + 4, order)) {
             (Some(f), Some(c)) => (f, c as usize),
             _ => break,
@@ -172,7 +257,7 @@ fn offset_patches(b: &[u8], ifd_off: usize, order: ByteOrder) -> Vec<(usize, u32
 /// `[orig_off, orig_off + len]`. Self-relative blobs (offsets < orig_off) and
 /// non-IFD blobs fail this, so they are correctly left unshifted.
 fn is_self_contained_tiff_ifd(b: &[u8], orig_off: usize, order: ByteOrder) -> bool {
-    let patches = offset_patches(b, 0, order);
+    let patches = offset_patches(b, order);
     if patches.is_empty() {
         return false;
     }
