@@ -28,6 +28,10 @@ fn main() -> ExitCode {
             println!("{}", cli::HELP);
             return ExitCode::SUCCESS;
         }
+        Action::Write { files, edits, overwrite_original } => {
+            let had_error = cli::run_write(&files, &edits, overwrite_original);
+            return if had_error { ExitCode::FAILURE } else { ExitCode::SUCCESS };
+        }
         Action::Run(o) => o,
     };
 

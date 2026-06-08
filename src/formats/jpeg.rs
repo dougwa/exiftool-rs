@@ -4,10 +4,98 @@
 //! block (APP1 starting with "Exif\0\0"), JFIF (APP0), comments, and the frame
 //! header (SOFn) which carries image dimensions. Mirrors ExifTool's JpegInfo.
 
-use crate::exif;
+use crate::error::{Error, Result};
+use crate::exif::{self, Edit};
 use crate::reader::{be_u16, ByteOrder};
 use crate::tag::ExtractedTag;
 use crate::value::Value;
+
+/// A minimal little-endian TIFF used to create an EXIF block from scratch when a
+/// JPEG has none. Its IFD0 carries the one mandatory tag ExifTool seeds into a
+/// newly-created JPEG IFD0, `YCbCrPositioning = 1 (Centered)`, so a created block
+/// validates the same way ExifTool's does.
+const EMPTY_TIFF: &[u8] = &[
+    b'I', b'I', 0x2a, 0x00, // II, magic 42
+    0x08, 0x00, 0x00, 0x00, // IFD0 at offset 8
+    0x01, 0x00, // 1 entry
+    0x13, 0x02, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, // YCbCrPositioning=1
+    0x00, 0x00, 0x00, 0x00, // next IFD = 0
+];
+
+/// The "Exif\0\0" identifier that prefixes the TIFF block in an APP1 segment.
+const EXIF_ID: &[u8] = b"Exif\x00\x00";
+
+/// Apply `edits` to the EXIF block of a JPEG, returning the new file bytes. The
+/// EXIF APP1 is rebuilt; an absent one is created. All other segments are copied
+/// verbatim.
+pub fn write(buf: &[u8], edits: &[Edit]) -> Result<Vec<u8>> {
+    if buf.len() < 2 || buf[0] != 0xFF || buf[1] != 0xD8 {
+        return Err(Error::Format("not a JPEG".into()));
+    }
+
+    // Locate the EXIF APP1 segment (and the end of APP0, an insertion point).
+    let mut pos = 2usize;
+    let mut exif: Option<(usize, usize)> = None; // (segment start at 0xFF, segment end)
+    let mut app0_end: Option<usize> = None;
+    while pos + 4 <= buf.len() {
+        if buf[pos] != 0xFF {
+            pos += 1;
+            continue;
+        }
+        let marker = buf[pos + 1];
+        if marker == 0xD8 || marker == 0xD9 || (0xD0..=0xD7).contains(&marker) {
+            pos += 2;
+            continue;
+        }
+        if marker == 0xDA {
+            break; // start of scan — no more metadata segments
+        }
+        let seg_len = match be_u16(&buf[pos + 2..]) {
+            Some(l) if l >= 2 => l as usize,
+            _ => break,
+        };
+        let seg_end = pos + 2 + seg_len;
+        if seg_end > buf.len() {
+            break;
+        }
+        let payload = &buf[pos + 4..seg_end];
+        if marker == 0xE1 && payload.starts_with(EXIF_ID) {
+            exif = Some((pos, seg_end));
+            break;
+        }
+        if marker == 0xE0 {
+            app0_end = Some(seg_end);
+        }
+        pos = seg_end;
+    }
+
+    // Build the new TIFF block: edit the existing one, or a fresh empty TIFF.
+    let (tiff_in, splice_start, splice_end): (&[u8], usize, usize) = match exif {
+        Some((start, end)) => (&buf[start + 4 + EXIF_ID.len()..end], start, end),
+        None => {
+            let at = app0_end.unwrap_or(2); // after APP0, else right after SOI
+            (EMPTY_TIFF, at, at)
+        }
+    };
+    let new_tiff = exif::write_tiff(tiff_in, edits)?;
+
+    let seg_len = 2 + EXIF_ID.len() + new_tiff.len();
+    if seg_len > 0xFFFF {
+        return Err(Error::Write(format!(
+            "EXIF data ({} bytes) exceeds the 64 KB JPEG segment limit",
+            new_tiff.len()
+        )));
+    }
+
+    let mut out = Vec::with_capacity(buf.len() + new_tiff.len());
+    out.extend_from_slice(&buf[..splice_start]);
+    out.extend_from_slice(&[0xFF, 0xE1]);
+    out.extend_from_slice(&(seg_len as u16).to_be_bytes());
+    out.extend_from_slice(EXIF_ID);
+    out.extend_from_slice(&new_tiff);
+    out.extend_from_slice(&buf[splice_end..]);
+    Ok(out)
+}
 
 pub fn parse(buf: &[u8]) -> Vec<ExtractedTag> {
     let mut out = Vec::new();

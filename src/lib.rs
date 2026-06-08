@@ -27,9 +27,11 @@ pub mod value;
 
 use std::path::Path;
 
-use error::Result;
+use error::{Error, Result};
 use tag::ExtractedTag;
 use value::Value;
+
+pub use exif::{Edit, EditOp};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -66,4 +68,42 @@ pub fn extract_from_path(path: &Path) -> Result<Vec<ExtractedTag>> {
     composite::compute(&mut tags);
 
     Ok(tags)
+}
+
+/// Options governing how a write is saved.
+#[derive(Default, Clone, Copy)]
+pub struct WriteOptions {
+    /// Overwrite the original file in place. When false (ExifTool's default),
+    /// the untouched original is first preserved as `FILE_original`.
+    pub overwrite_original: bool,
+}
+
+/// Apply `edits` to the metadata of the file at `path`, saving the result.
+///
+/// Only JPEG is supported today. Unless `overwrite_original` is set, the
+/// original bytes are copied to `<path>_original` (never clobbering an existing
+/// backup) before the new file is written.
+pub fn write_to_path(path: &Path, edits: &[Edit], opts: WriteOptions) -> Result<()> {
+    let data = std::fs::read(path)?;
+    let ext = path.extension().and_then(|e| e.to_str());
+    let ft = filetype::identify(&data, ext);
+
+    let new_data = match ft.map(|f| f.typ) {
+        Some("JPEG") => formats::jpeg::write(&data, edits)?,
+        Some(other) => {
+            return Err(Error::Unsupported(format!("writing not supported for {other} files")))
+        }
+        None => return Err(Error::Unsupported("unrecognised file type".into())),
+    };
+
+    if !opts.overwrite_original {
+        let mut backup = path.as_os_str().to_owned();
+        backup.push("_original");
+        let backup = std::path::PathBuf::from(backup);
+        if !backup.exists() {
+            std::fs::write(&backup, &data)?;
+        }
+    }
+    std::fs::write(path, &new_data)?;
+    Ok(())
 }
